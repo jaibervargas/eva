@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from app.llm.base import ClienteLLM, ErrorLLM
-from app.llm.local_client import LMSTUDIO_URL, OLLAMA_URL, ClienteLocal
+from app.llm.local_client import LMSTUDIO_URL, OLLAMA_URL, ClienteLocal, conectar
 
 
 def _sse(chunks: list[dict]) -> bytes:
@@ -117,8 +117,88 @@ def test_listar_modelos_raises_error_llm_on_http_error():
         _client(failing).listar_modelos()
 
 
+def _http(server):
+    return httpx.Client(transport=httpx.MockTransport(server))
+
+
+def test_conectar_uses_saved_model_when_installed():
+    server = FakeServer(models=["a", "b"])
+    cliente = conectar(OLLAMA_URL, "b", http_client=_http(server))
+    assert (cliente.modelo, cliente.base_url) == ("b", OLLAMA_URL)
+
+
+def test_conectar_falls_back_to_first_chat_model():
+    server = FakeServer(models=["text-embedding-x", "a", "b"])
+    assert conectar(LMSTUDIO_URL, "borrado", http_client=_http(server)).modelo == "a"
+
+
+def test_conectar_without_chat_models_raises_error_llm():
+    server = FakeServer(models=["text-embedding-x"])
+    with pytest.raises(ErrorLLM) as exc:
+        conectar(LMSTUDIO_URL, "", http_client=_http(server))
+    assert str(exc.value) == "El servidor local no tiene modelos de chat. Descarga uno en LM Studio u Ollama."
+
+
 def test_listar_modelos_skips_embedding_models():
     server = FakeServer(
         models=["qwen/qwen3-1.7b", "text-embedding-nomic-embed-text-v1.5", "google/gemma"]
     )
     assert _client(server).listar_modelos() == ["qwen/qwen3-1.7b", "google/gemma"]
+
+
+# ----- S1: transport failures while streaming -----
+
+PERDIDA = (
+    "Se perdió la conexión con el modelo local mientras respondía. "
+    "Revisa que LM Studio u Ollama siga abierto e inténtalo de nuevo."
+)
+
+
+class _StreamCortado(httpx.SyncByteStream):
+    """Sends some SSE chunks, then the connection breaks with ``error``."""
+
+    def __init__(self, chunks, error):
+        self.chunks = chunks
+        self.error = error
+
+    def __iter__(self):
+        for c in self.chunks:
+            yield f"data: {json.dumps(c)}\n\n".encode()
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    "error",
+    [httpx.RemoteProtocolError("peer closed connection"), httpx.ReadTimeout("timed out")],
+)
+def test_stream_broken_mid_answer_raises_error_llm_after_delivering_fragments(error):
+    def server(request):
+        return httpx.Response(
+            200,
+            stream=_StreamCortado([_chunk(content="Hola"), _chunk(content=", soy")], error),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    recibidas = []
+    with pytest.raises(ErrorLLM) as exc:
+        for parte in _client(server).responder([{"role": "user", "content": "hola"}]):
+            recibidas.append(parte)
+    assert recibidas == ["Hola", ", soy"]
+    assert str(exc.value) == PERDIDA
+
+
+# ----- S5: short timeout for listing models -----
+
+
+def test_listing_models_uses_a_short_timeout_but_chat_keeps_the_long_one():
+    from app.llm.local_client import TIMEOUT_MODELOS
+
+    server = FakeServer(chunks=[_chunk(content="ok")], models=["a"])
+    cliente = conectar(LMSTUDIO_URL, "", http_client=_http(server))
+    list(cliente.responder([{"role": "user", "content": "hola"}]))
+
+    modelos, chat = server.requests
+    assert TIMEOUT_MODELOS == 5.0
+    assert modelos.url.path.endswith("/models")
+    assert modelos.extensions["timeout"]["read"] == 5.0
+    assert chat.extensions["timeout"]["read"] == 120.0

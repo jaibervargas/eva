@@ -102,9 +102,9 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 | 7 — Docker, opcional | 12 | `docker compose up` para servidores |
 | 8 — Pruebas, documentación y lanzamiento | 13–14 | Pruebas con pytest, README, pruebas con usuarios, versión 1.0 publicada |
 
-**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio); el cliente de la nube pasó a la Fase 2.
+**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A: historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`, con manejo de errores de conexión revisado y 68 pruebas automatizadas.
 
-**Siguiente paso concreto:** Fase 2: guardar el historial en SQLite, la pantalla de ajustes con `config.json`, el cliente de la nube y la memoria a largo plazo con Engram.
+**Siguiente paso concreto:** bloque 2B (memoria a largo plazo con Engram) y luego 2C (cliente de la nube e inicio de sesión).
 
 ## Instalación y ejecución
 
@@ -158,20 +158,34 @@ muestra "…" y luego se va escribiendo a medida que llega. Enter envía y
 Shift+Enter hace un salto de línea. Si LM Studio está apagado, aparece un
 mensaje en rojo explicándolo.
 
-### 4. Elegir otro modelo o servidor
+A la izquierda está la barra lateral: **Nueva conversación** empieza un chat en
+blanco y la lista muestra las conversaciones guardadas (la más reciente arriba);
+al hacer clic en una, se vuelve a abrir y Eva la retoma con sus últimos 20 mensajes.
+Las conversaciones se guardan solas y siguen ahí al cerrar y volver a abrir la app.
 
-El chat se conecta a LM Studio en `http://localhost:1234/v1` y usa el primer
-modelo de chat que liste el servidor (los modelos Qwen3 "piensan" unos segundos
-antes de contestar). Hasta que exista la pantalla de ajustes (Fase 2), ambos se
-pueden cambiar con variables de entorno antes de correr la app:
+### 4. Elegir el proveedor y el modelo
 
-```powershell
-$env:EVA_MODELO = "google/gemma-4-12b-qat"           # PowerShell
-$env:EVA_SERVIDOR = "http://localhost:11434/v1"      # Ollama en lugar de LM Studio
-python -m app.main
-```
+Abajo en la barra lateral se ve el modelo en uso (por ejemplo
+`LM Studio · qwen/qwen3-1.7b`; mientras busca el servidor dice `Conectando…`, y
+si no lo encuentra muestra un solo aviso en rojo que desaparece al conectarse).
+El botón de engranaje abre **Ajustes**, donde se
+elige el proveedor (LM Studio u Ollama) y uno de los modelos instalados en él. Al
+guardar, el cambio se aplica enseguida. La primera vez se usa LM Studio con el
+primer modelo de chat que liste (los modelos Qwen3 "piensan" unos segundos antes
+de contestar).
 
-En CMD: `set EVA_MODELO=google/gemma-4-12b-qat`. En Mac/Linux: `export EVA_MODELO=...`.
+### Dónde se guardan los datos
+
+| Sistema | Carpeta |
+| --- | --- |
+| Windows | `%APPDATA%\Eva` |
+| Mac | `~/Library/Application Support/Eva` |
+| Linux | `~/.local/share/eva` |
+
+Ahí están `eva.db` (el historial del chat, en SQLite) y `config.json` (los
+ajustes). En Mac y Linux la carpeta queda con permisos `700`: solo tu usuario
+puede leer tus conversaciones. Para usar otra carpeta, define la variable `EVA_DATA_DIR` antes de
+correr la app; por ejemplo, en PowerShell: `$env:EVA_DATA_DIR = "C:\pruebas\eva"`.
 
 ### 5. Correr las pruebas
 

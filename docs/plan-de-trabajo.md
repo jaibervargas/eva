@@ -221,10 +221,10 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 ### Fase 2 — Memoria, Engram y ajustes (semanas 3 y 4)
 
 - [ ] Implementar `llm/cloud_client.py` (OpenAI, Claude y Gemini con clave de API), movido desde la Fase 1.
-- [ ] Crear la base SQLite con las tablas `conversaciones` y `mensajes`, guardada en la carpeta del usuario.
-- [ ] Guardar cada mensaje y enviar los últimos 20 al modelo como contexto.
-- [ ] Agregar en la barra lateral: nueva conversación y lista de conversaciones anteriores.
-- [ ] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`.
+- [x] Crear la base SQLite con las tablas `conversaciones` y `mensajes`, guardada en la carpeta del usuario.
+- [x] Guardar cada mensaje y enviar los últimos 20 al modelo como contexto.
+- [x] Agregar en la barra lateral: nueva conversación y lista de conversaciones anteriores.
+- [ ] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`. *(Parcial: ya elige LM Studio u Ollama y el modelo instalado, y guarda en `config.json`; faltan la nube y su forma de acceso (bloque 2C) y la voz (Fase 4).)*
 - [ ] Descargar el programa de Engram para Windows, Mac y Linux desde sus versiones publicadas en GitHub y guardarlo en `bin/`.
 - [ ] Implementar `memory/engram_client.py`: la app abre Engram en segundo plano y se conecta a él por MCP con la librería `mcp` de Python.
 - [ ] Antes de cada respuesta, buscar en Engram los recuerdos relacionados con la pregunta y agregarlos al contexto del modelo.
@@ -258,7 +258,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 - [ ] Aplicar la guía visual de la sección 6 (tema oscuro de Flet y colores).
 - [ ] Agregar los indicadores de estado (escuchando, pensando, hablando).
-- [ ] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida.
+- [ ] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Parcial, adelantado en el bloque 2A: LM Studio u Ollama apagado o que se corta a mitad de respuesta, errores inesperados, ajustes que no se pueden guardar y conexión en segundo plano sin congelar la ventana. Pendiente de la revisión: si la conexión falla de forma inesperada, la etiqueta queda en "Conectando…" sin burbuja de error.)*
 - [ ] Escribir `setup_inicial.py`: detectar si Ollama o LM Studio están abiertos y descargar los modelos de voz al primer inicio, con barra de progreso.
 
 **Entregable:** versión beta lista para que otra persona la pruebe desde el código.
@@ -295,7 +295,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 8 — Pruebas, documentación y lanzamiento (semanas 13 y 14)
 
-- [ ] Escribir pruebas con pytest para memoria, STT, TTS y clientes de IA.
+- [ ] Escribir pruebas con pytest para memoria, STT, TTS y clientes de IA. *(Parcial: 68 pruebas cubren memoria, cliente local, configuración y pantalla. Pendiente: fijar la plataforma en dos pruebas de permisos para que en Mac no toquen la carpeta real del usuario.)*
 - [ ] Escribir el `README.md`: requisitos, instalación, uso, problemas frecuentes y cómo saltar la advertencia de seguridad en Mac y Windows.
 - [ ] Pedir a 2 o 3 personas que lo instalen y anotar sus problemas.
 - [ ] Corregir lo encontrado y publicar la versión 1.0 con sus instaladores en GitHub Releases.
@@ -339,4 +339,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0 y 1 están completas con el modelo local (LM Studio). Sigue la Fase 2: guardar el historial en SQLite, la pantalla de ajustes con `config.json`, el cliente de la nube y la memoria a largo plazo con Engram.
+**Siguiente paso concreto:** las Fases 0 y 1 están completas con el modelo local (LM Studio). La Fase 2 se divide en tres bloques: 2A (historial en SQLite, barra lateral y ajustes locales) está hecho, revisado y con las correcciones de la revisión aplicadas (68 pruebas); sigue 2B (memoria a largo plazo con Engram) y luego 2C (cliente de la nube e inicio de sesión con `keyring`).
