@@ -16,7 +16,7 @@ import flet as ft
 from app.auth_chatgpt import MENSAJE_CANCELADO, ErrorAuth, cerrar_sesion, iniciar_sesion_chatgpt
 from app.cuentas_chatgpt import AlmacenCuentas, CuentaChatGPT, ErrorCuentas
 from app.llm.base import ErrorLLM
-from app.llm.sesion_chatgpt import MENSAJE_PLAN, MENSAJE_SIN_MODELOS
+from app.llm.sesion_chatgpt import MENSAJE_PLAN, MENSAJE_SIN_MODELOS, cerrar_sesion_cuenta
 from app.llm.sesion_chatgpt import listar_modelos as listar_modelos_chatgpt
 from app.secretos import ErrorSecretos
 
@@ -262,13 +262,13 @@ class PanelChatGPT:
         self.page.run_thread(self._cerrar, cuenta_id)
 
     def _cerrar(self, cuenta_id: str) -> None:
-        """Revoke at OpenAI (best effort), then always forget the local tokens."""
+        """Revoke at OpenAI (best effort), then always forget the local tokens.
+
+        Serialized with the chat's token refresh for the same account.
+        """
         confirmado = True
         try:
-            cuenta = self.almacen.obtener(cuenta_id)
-            if cuenta is not None and cuenta.refresh_token:
-                confirmado = cerrar_sesion(cuenta.client_id, cuenta.refresh_token)
-            self.almacen.olvidar_tokens(cuenta_id)
+            confirmado = cerrar_sesion_cuenta(self.almacen, cuenta_id, cerrar_sesion)
         except (ErrorCuentas, ErrorSecretos) as exc:
             error = str(exc)
         except Exception as exc:

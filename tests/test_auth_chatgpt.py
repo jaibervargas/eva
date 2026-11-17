@@ -63,6 +63,8 @@ MENSAJE_CANCELADO = "Se canceló el inicio de sesión con ChatGPT."
 MENSAJE_TIMEOUT = "No se completó el inicio de sesión con ChatGPT a tiempo. Inténtalo de nuevo."
 MENSAJE_VENCIDA = "Tu sesión de ChatGPT venció. Vuelve a iniciar sesión en Ajustes."
 MENSAJE_LISTO = "Listo. Ya puedes volver a Eva."
+MENSAJE_ENLACE_VIEJO = "Este enlace de inicio de sesión ya no sirve."
+MENSAJE_NO_DISPONIBLE = "ChatGPT no está disponible en este momento. Inténtalo más tarde."
 
 CLAVE_RSA = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 OTRA_CLAVE_RSA = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -132,21 +134,38 @@ class NavegadorFalso:
         return True
 
     def _visitar(self, destino: str) -> None:
-        # Plain http.client (no logging): the request line carries the code.
-        partes = urlsplit(destino)
-        conexion = http.client.HTTPConnection(partes.hostname, partes.port, timeout=5)
-        try:
-            conexion.request("GET", f"{partes.path}?{partes.query}")
-            r = conexion.getresponse()
-            self.respuesta = Pagina(r.status, r.getheader("Content-Type", ""), r.read().decode())
-        finally:
-            conexion.close()
+        self.respuesta = _pedir(destino)
 
     def esperar(self) -> None:
         if self.hilo is not None:
             self.hilo.join(5)
         if self.fallo is not None:
             raise self.fallo
+
+
+def _pedir(destino: str) -> Pagina:
+    # Plain http.client (no logging): the request line carries the code.
+    partes = urlsplit(destino)
+    conexion = http.client.HTTPConnection(partes.hostname, partes.port, timeout=5)
+    try:
+        conexion.request("GET", f"{partes.path}?{partes.query}")
+        r = conexion.getresponse()
+        return Pagina(r.status, r.getheader("Content-Type", ""), r.read().decode())
+    finally:
+        conexion.close()
+
+
+class NavegadorConEnlaceViejo(NavegadorFalso):
+    """A stale tab hits the callback with ``viejo`` before the real redirect."""
+
+    def __init__(self, viejo, consulta=_consulta_nueva):
+        super().__init__(consulta)
+        self.viejo = viejo
+        self.vieja: Pagina | None = None
+
+    def _visitar(self, destino: str) -> None:
+        self.vieja = _pedir(f"{self.params['redirect_uri']}?{urlencode(self.viejo(self.params))}")
+        super()._visitar(destino)
 
 
 def _verificar_autorizacion(
@@ -216,8 +235,12 @@ class OpenAIFalso:
         scope=SCOPES,
         revocar=None,
         refrescar=None,
+        descubrimiento=None,
+        claves=None,
     ):
         self.navegador = navegador
+        self.descubrimiento = descubrimiento
+        self.claves = claves
         self.token = token
         self.reclamos = reclamos or (lambda r: r)
         self.firmar_con = firmar_con
@@ -234,6 +257,10 @@ class OpenAIFalso:
         self.pedidos.append(request)
         url = str(request.url)
         assert "authorization" not in request.headers
+        if request.method == "GET" and url == DISCOVERY_URL and self.descubrimiento:
+            return self.descubrimiento(request)
+        if request.method == "GET" and url == JWKS_URL and self.claves:
+            return self.claves(request)
         if request.method == "GET" and url == DISCOVERY_URL:
             return httpx.Response(
                 200,
@@ -464,18 +491,46 @@ def test_new_registration_without_an_issued_client_fails(extra):
     assert _puerto_libre(navegador.puerto)
 
 
-def test_wrong_state_is_not_authorized_and_skips_the_exchange():
+def test_a_wrong_state_alone_is_ignored_until_the_timeout():
     navegador = NavegadorFalso(
         lambda p: {"code": CODIGO, "state": "otro-estado", "client_id": CLIENTE_EMITIDO}
     )
     openai = OpenAIFalso(navegador)
 
     with pytest.raises(ErrorAuth) as exc:
-        _iniciar(navegador, openai)
+        _iniciar(navegador, openai, timeout=1)
 
-    assert str(exc.value) == MENSAJE_NO_AUTORIZO
+    assert str(exc.value) == MENSAJE_TIMEOUT
     assert openai.pedidos == []
+    assert navegador.respuesta.status_code == 400
+    assert MENSAJE_ENLACE_VIEJO in navegador.respuesta.text
     assert MENSAJE_LISTO not in navegador.respuesta.text
+    assert _puerto_libre(navegador.puerto)
+
+
+@pytest.mark.parametrize(
+    "viejo",
+    [
+        lambda p: {"code": "codigo-viejo", "state": "estado-viejo", "client_id": CLIENTE_EMITIDO},
+        lambda p: {"code": "codigo-viejo", "client_id": CLIENTE_EMITIDO},
+        lambda p: {"error": "access_denied", "state": "estado-viejo"},
+        lambda p: {"error": "access_denied"},
+    ],
+    ids=["state-equivocado", "sin-state", "denegado-state-equivocado", "denegado-sin-state"],
+)
+def test_a_stale_callback_is_ignored_and_the_valid_one_completes(viejo):
+    navegador = NavegadorConEnlaceViejo(viejo)
+    openai = OpenAIFalso(navegador)
+
+    resultado = _iniciar(navegador, openai)
+
+    assert resultado.client_id == CLIENTE_EMITIDO
+    assert resultado.access_token == ACCESS
+    assert navegador.vieja.status_code == 400
+    assert MENSAJE_ENLACE_VIEJO in navegador.vieja.text
+    assert MENSAJE_LISTO not in navegador.vieja.text
+    assert MENSAJE_LISTO in navegador.respuesta.text
+    assert len(openai.canjes) == 1
     assert _puerto_libre(navegador.puerto)
 
 
@@ -652,6 +707,132 @@ def test_cancel_after_the_exchange_discards_the_tokens():
     for secreto in (ACCESS, REFRESH):
         assert secreto not in str(exc.value)
     assert len(openai.canjes) == 1
+    assert openai.revocaciones == [
+        {"token": REFRESH, "token_type_hint": "refresh_token", "client_id": CLIENTE_EMITIDO}
+    ]
+    assert _puerto_libre(navegador.puerto)
+
+
+def _revocacion(modo):
+    if modo == "confirma":
+        return None
+    if modo == "rechaza":
+        return lambda r: httpx.Response(400, json={"error": "invalid_client"})
+
+    def sin_red(request):
+        raise httpx.ConnectError("sin red", request=request)
+
+    return sin_red
+
+
+@pytest.mark.parametrize("revocacion", ["confirma", "rechaza", "sin-red"])
+@pytest.mark.parametrize(
+    ("fallo", "mensaje"),
+    [
+        ("cancelado", MENSAJE_CANCELADO),
+        ("identidad", MENSAJE_IDENTIDAD),
+        ("otra-cuenta", MENSAJE_OTRA_CUENTA),
+    ],
+)
+def test_a_failure_after_the_exchange_revokes_the_new_refresh_token(
+    sin_esperas, fallo, mensaje, revocacion
+):
+    cancelado = threading.Event()
+    navegador = NavegadorFalso()
+    openai = OpenAIFalso(
+        navegador,
+        firmar_con=OTRA_CLAVE_RSA if fallo == "identidad" else CLAVE_RSA,
+        revocar=_revocacion(revocacion),
+    )
+
+    def manejar(request):
+        respuesta = openai(request)
+        if fallo == "cancelado" and str(request.url) == TOKEN_URL:
+            cancelado.set()
+        return respuesta
+
+    extra = (
+        {"client_id": CLIENTE_EMITIDO, "subject_esperado": "user-otro"}
+        if fallo == "otra-cuenta"
+        else {}
+    )
+    with pytest.raises(ErrorAuth) as exc:
+        iniciar_sesion_chatgpt(
+            HOST_ID,
+            abrir_navegador=navegador,
+            timeout=5,
+            http_client=httpx.Client(transport=httpx.MockTransport(manejar)),
+            cancelado=cancelado,
+            **extra,
+        )
+    navegador.esperar()
+
+    assert str(exc.value) == mensaje
+    assert openai.revocaciones
+    assert all(
+        r == {"token": REFRESH, "token_type_hint": "refresh_token", "client_id": CLIENTE_EMITIDO}
+        for r in openai.revocaciones
+    )
+    assert _puerto_libre(navegador.puerto)
+
+
+def test_a_successful_sign_in_revokes_nothing():
+    navegador = NavegadorFalso()
+    openai = OpenAIFalso(navegador)
+
+    _iniciar(navegador, openai)
+
+    assert openai.revocaciones == []
+
+
+def _sin_red(request):
+    raise httpx.ConnectError("sin red", request=request)
+
+
+def _decodificacion_rota(request):
+    raise httpx.DecodingError("contenido ilegible", request=request)
+
+
+@pytest.mark.parametrize("donde", ["descubrimiento", "claves"])
+@pytest.mark.parametrize(
+    ("falla", "mensaje"),
+    [
+        (_sin_red, MENSAJE_SIN_CONEXION),
+        (_decodificacion_rota, MENSAJE_SIN_CONEXION),
+        (lambda r: httpx.Response(503), MENSAJE_NO_DISPONIBLE),
+        (lambda r: httpx.Response(500, json={"error": "server_error"}), MENSAJE_NO_DISPONIBLE),
+    ],
+    ids=["sin-red", "decodificacion", "503", "500"],
+)
+def test_discovery_and_jwks_failures_are_not_identity_errors(sin_esperas, donde, falla, mensaje):
+    navegador = NavegadorFalso()
+    openai = OpenAIFalso(navegador, **{donde: falla})
+
+    with pytest.raises(ErrorAuth) as exc:
+        _iniciar(navegador, openai)
+
+    assert str(exc.value) == mensaje
+    assert len(openai.canjes) == 1
+
+
+def test_a_decoding_error_during_the_exchange_is_no_connection():
+    navegador = NavegadorFalso()
+
+    def manejar(request):
+        if str(request.url) == TOKEN_URL:
+            raise httpx.DecodingError("contenido ilegible", request=request)
+        return OpenAIFalso(navegador)(request)
+
+    with pytest.raises(ErrorAuth) as exc:
+        iniciar_sesion_chatgpt(
+            HOST_ID,
+            abrir_navegador=navegador,
+            timeout=5,
+            http_client=httpx.Client(transport=httpx.MockTransport(manejar)),
+        )
+    navegador.esperar()
+
+    assert str(exc.value) == MENSAJE_SIN_CONEXION
     assert _puerto_libre(navegador.puerto)
 
 
@@ -820,7 +1001,7 @@ def test_secrets_never_reach_the_logs_or_the_page(caplog, capfd):
             lambda p: {"code": CODIGO, "state": "otro", "client_id": CLIENTE_EMITIDO}
         )
         with pytest.raises(ErrorAuth):
-            _iniciar(equivocado)
+            _iniciar(equivocado, timeout=1)
 
     salida = capfd.readouterr()
     verifier = openai.canjes[0]["code_verifier"]
@@ -902,6 +1083,17 @@ def test_no_connection_on_refresh_is_not_an_expired_session():
 
     with pytest.raises(ErrorAuth) as exc:
         renovar(CLIENTE_EMITIDO, REFRESH, http_client=_cliente(sin_red))
+
+    assert not isinstance(exc.value, ErrorSesionVencida)
+    assert str(exc.value) == MENSAJE_SIN_CONEXION
+
+
+def test_a_decoding_error_on_refresh_is_no_connection():
+    def roto(request):
+        raise httpx.DecodingError("contenido ilegible", request=request)
+
+    with pytest.raises(ErrorAuth) as exc:
+        renovar(CLIENTE_EMITIDO, REFRESH, http_client=_cliente(roto))
 
     assert not isinstance(exc.value, ErrorSesionVencida)
     assert str(exc.value) == MENSAJE_SIN_CONEXION

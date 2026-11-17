@@ -233,6 +233,14 @@ def test_chat_uses_120s_timeout_and_listing_10s():
     assert chat.extensions["timeout"]["read"] == 120.0
 
 
+def test_chat_connects_within_10s_and_reads_up_to_120s():
+    servidor = Servidor(textos=["ok"])
+    list(_cliente(servidor).responder(HOLA))
+    (chat,) = servidor.requests
+    assert chat.extensions["timeout"]["connect"] == 10.0
+    assert chat.extensions["timeout"]["read"] == 120.0
+
+
 @pytest.mark.parametrize("estado", [500, 503, 429, 401])
 def test_failed_requests_are_not_retried(estado):
     servidor = Servidor(estado=estado, cuerpo=_cuerpo())
@@ -291,8 +299,30 @@ def test_empty_stream_is_a_lost_connection():
     assert _recibir(Servidor(partes=[])) == ([], PERDIDA)
 
 
-def test_incomplete_response_is_a_lost_connection():
-    assert _recibir(Servidor(partes=[_delta("Hola"), _incompleto()])) == (["Hola"], PERDIDA)
+def test_incomplete_response_says_why():
+    esperado = "ChatGPT no terminó la respuesta (x). Inténtalo de nuevo."
+    assert _recibir(Servidor(partes=[_delta("Hola"), _incompleto()])) == (["Hola"], esperado)
+
+
+@pytest.mark.parametrize(
+    "respuesta",
+    [
+        {"status": "incomplete"},
+        {"status": "incomplete", "incomplete_details": None},
+        {"status": "incomplete", "incomplete_details": {"reason": ["raro"]}},
+    ],
+    ids=["sin-detalles", "detalles-nulos", "razon-no-texto"],
+)
+def test_incomplete_response_without_reason(respuesta):
+    evento = _evento({"type": "response.incomplete", "response": respuesta})
+    esperado = "ChatGPT no terminó la respuesta. Inténtalo de nuevo."
+    assert _recibir(Servidor(partes=[_delta("Hola"), evento])) == (["Hola"], esperado)
+
+
+def test_completed_without_text_is_an_empty_answer():
+    esperado = "ChatGPT no devolvió ninguna respuesta. Inténtalo de nuevo."
+    assert _recibir(Servidor(partes=[_creado(), _completado()])) == ([], esperado)
+    assert _recibir(Servidor(partes=[_creado(), _delta(""), _completado()])) == ([], esperado)
 
 
 def test_stream_cut_keeps_delivered_fragments():
@@ -326,6 +356,12 @@ def test_failed_response_without_code():
     assert recibidas == []
     assert mensaje.startswith("ChatGPT devolvió un error: ")
     assert TOKEN not in mensaje
+
+
+@pytest.mark.parametrize("codigo", [["subscription_sharing_usage_limit_exceeded"], {"a": 1}], ids=["lista", "objeto"])
+def test_failed_response_with_a_non_text_code_uses_its_message(codigo):
+    servidor = Servidor(partes=[_delta("Hola"), _fallido(codigo, "se cayó")])
+    assert _recibir(servidor) == (["Hola"], "ChatGPT devolvió un error: se cayó")
 
 
 def test_error_event_mid_stream_uses_its_code():
@@ -366,6 +402,16 @@ def test_http_error_messages(estado, cuerpo, esperado):
 )
 def test_other_http_error_shows_detail(estado, cuerpo, detalle):
     esperado = f"ChatGPT devolvió un error: {detalle}"
+    assert _ambos(lambda: Servidor(estado=estado, cuerpo=cuerpo)) == (esperado, esperado)
+
+
+@pytest.mark.parametrize("codigo", [["subscription_sharing_user_not_eligible"], {"a": 1}], ids=["lista", "objeto"])
+@pytest.mark.parametrize(
+    ("estado", "esperado"),
+    [(400, "ChatGPT devolvió un error: algo"), (401, SESION), (503, NO_DISPONIBLE)],
+)
+def test_http_error_with_a_non_text_code_is_treated_as_unknown(codigo, estado, esperado):
+    cuerpo = {"error": {"code": codigo, "message": "algo"}}
     assert _ambos(lambda: Servidor(estado=estado, cuerpo=cuerpo)) == (esperado, esperado)
 
 

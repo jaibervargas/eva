@@ -57,9 +57,10 @@ class CuentaChatGPT:
     email: str
     subject: str
     client_id: str
-    id_token: str = ""
-    access_token: str = ""
-    refresh_token: str = ""
+    # Kept out of repr so a logged or printed account never shows a token.
+    id_token: str = field(default="", repr=False)
+    access_token: str = field(default="", repr=False)
+    refresh_token: str = field(default="", repr=False)
     expira: float = 0
     scopes: list[str] = field(default_factory=list)
     # When the account was last saved (epoch seconds); set by ``guardar``.
@@ -216,6 +217,9 @@ class AlmacenCuentas:
             descriptor = os.open(temporal, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
             with os.fdopen(descriptor, "wb") as salida:
                 salida.write(cifrado)
+                # On disk before the rename, so a crash never leaves an empty file.
+                salida.flush()
+                os.fsync(salida.fileno())
             if sys.platform != "win32":
                 os.chmod(temporal, 0o600)
             os.replace(temporal, ruta)
@@ -223,6 +227,19 @@ class AlmacenCuentas:
             with contextlib.suppress(OSError):
                 temporal.unlink(missing_ok=True)
             raise
+        _sincronizar_carpeta(ruta.parent)
+
+
+def _sincronizar_carpeta(carpeta: Path) -> None:
+    """Persist the rename itself where the OS allows it (not on Windows)."""
+    if sys.platform == "win32":
+        return
+    with contextlib.suppress(OSError):
+        descriptor = os.open(carpeta, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
 
 def _texto(valor: Any) -> str:

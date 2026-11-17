@@ -21,6 +21,8 @@ URL_MODELOS = "https://api.openai.com/v1/models"
 # Listing models must answer fast (the UI waits for it); chat answers may take long.
 TIMEOUT_MODELOS = 10.0
 TIMEOUT_CHAT = 120.0
+# Reaching OpenAI must be quick even when the answer itself may take long.
+TIMEOUT_CONEXION = 10.0
 
 NOMBRE = "ChatGPT"
 
@@ -32,6 +34,8 @@ _SIN_CONEXION = "No pude conectarme con ChatGPT. Revisa tu conexión a internet.
 _TARDO = "ChatGPT tardó demasiado en responder. Inténtalo de nuevo."
 _PERDIDA = "Se perdió la conexión con ChatGPT mientras respondía. Inténtalo de nuevo."
 _ERROR = "ChatGPT devolvió un error: {}"
+_INCOMPLETA = "ChatGPT no terminó la respuesta{}. Inténtalo de nuevo."
+_VACIA = "ChatGPT no devolvió ninguna respuesta. Inténtalo de nuevo."
 
 # Error codes of the plan ("subscription sharing") and the message each one shows.
 _POR_CODIGO = {
@@ -77,7 +81,11 @@ class ClienteChatGPT(ClienteLLM):
         respondio = False  # at least one text fragment reached the user
         try:
             with self._http.stream(
-                "POST", URL_RESPUESTAS, json=cuerpo, headers=_cabeceras(token), timeout=TIMEOUT_CHAT
+                "POST",
+                URL_RESPUESTAS,
+                json=cuerpo,
+                headers=_cabeceras(token),
+                timeout=httpx.Timeout(TIMEOUT_CHAT, connect=TIMEOUT_CONEXION),
             ) as respuesta:
                 if respuesta.status_code >= 400:
                     respuesta.read()
@@ -91,9 +99,11 @@ class ClienteChatGPT(ClienteLLM):
                             respondio = True
                             yield texto
                     elif tipo == "response.completed":
+                        if not respondio:
+                            raise ErrorLLM(_VACIA)
                         return
                     elif tipo == "response.incomplete":
-                        raise ErrorLLM(_PERDIDA)
+                        raise _error_incompleta(evento, token)
                     elif tipo in ("response.failed", "error"):
                         raise _error_evento(evento, token)
         except _ERRORES_DE_RED as exc:
@@ -173,7 +183,7 @@ def _error_http(respuesta: Any, token: str) -> ErrorLLM:
         cuerpo = None
     error = cuerpo.get("error") if isinstance(cuerpo, dict) else None
     error = error if isinstance(error, dict) else {}
-    codigo = error.get("code")
+    codigo = _codigo(error)
     if codigo in _POR_CODIGO:
         return ErrorLLM(_POR_CODIGO[codigo])
     if respuesta.status_code == 401:
@@ -194,14 +204,29 @@ def _error_evento(evento: dict[str, Any], token: str) -> ErrorLLM:
     error = respuesta.get("error") if isinstance(respuesta, dict) else None
     if not isinstance(error, dict):
         error = evento.get("error") if isinstance(evento.get("error"), dict) else evento
-    codigo = error.get("code")
+    codigo = _codigo(error)
     if codigo in _POR_CODIGO:
         return ErrorLLM(_POR_CODIGO[codigo])
-    if isinstance(codigo, str) and codigo:
+    if codigo:
         return ErrorLLM(_ERROR.format(_enmascarar(codigo, token)))
     mensaje = error.get("message")
     detalle = mensaje if isinstance(mensaje, str) and mensaje else "la respuesta falló"
     return ErrorLLM(_ERROR.format(_enmascarar(detalle, token)))
+
+
+def _codigo(error: dict[str, Any]) -> str:
+    """The error code; anything but text (a list, an object) counts as unknown."""
+    codigo = error.get("code")
+    return codigo if isinstance(codigo, str) else ""
+
+
+def _error_incompleta(evento: dict[str, Any], token: str) -> ErrorLLM:
+    """Error of a ``response.incomplete`` event, with its reason when it has one."""
+    respuesta = evento.get("response")
+    detalles = respuesta.get("incomplete_details") if isinstance(respuesta, dict) else None
+    razon = detalles.get("reason") if isinstance(detalles, dict) else None
+    sufijo = f" ({_enmascarar(razon, token)})" if isinstance(razon, str) and razon else ""
+    return ErrorLLM(_INCOMPLETA.format(sufijo))
 
 
 def _enmascarar(texto: str, token: str) -> str:

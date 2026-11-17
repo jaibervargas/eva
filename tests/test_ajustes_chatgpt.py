@@ -550,6 +550,22 @@ def test_signing_out_revokes_then_forgets_the_tokens(monkeypatch, openai, confir
     assert dialogo.chatgpt.cuenta.value == guardada.id  # still listed, ready to sign in again
 
 
+def test_signing_out_forgets_the_tokens_even_if_the_revocation_raises(monkeypatch, openai):
+    guardada = _cuenta()
+
+    def cerrar_sesion(client_id, refresh_token, http_client=None):
+        raise RuntimeError("revocación rota")
+
+    monkeypatch.setattr(panel_chatgpt, "cerrar_sesion", cerrar_sesion)
+    dialogo, *_ = _dialogo()
+    dialogo.chatgpt._cerrar_sesion(None)
+
+    assert AlmacenCuentas().obtener(guardada.id).conectada is False
+    assert _estado(dialogo) == (SIN_CONFIRMAR, GRIS_TEXTO)
+    assert dialogo.chatgpt.boton_cerrar.visible is False
+    assert dialogo.boton_guardar.disabled is True
+
+
 def test_signing_out_runs_off_the_ui_loop(monkeypatch, openai):
     _cuenta()
     monkeypatch.setattr(panel_chatgpt, "cerrar_sesion", lambda c, r, http_client=None: True)

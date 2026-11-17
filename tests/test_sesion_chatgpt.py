@@ -18,6 +18,7 @@ from app.llm import sesion_chatgpt
 from app.llm.base import ErrorLLM
 from app.llm.chatgpt_client import ClienteChatGPT
 from app.llm.sesion_chatgpt import cliente_respaldo, conectar_chatgpt, proveedor_token
+from app.secretos import ErrorSecretos
 from tests.keyring_falso import KeyringFalso, KeyringRoto
 
 PLAN = "chatgpt.tokens.use.direct"
@@ -238,6 +239,168 @@ def test_errors_never_carry_the_tokens(monkeypatch):
 
     assert "acc-1" not in str(error.value) and "ref-1" not in str(error.value)
     assert error.value.__cause__ is None and error.value.__suppress_context__
+
+
+# ----- rotated tokens that cannot be saved -----
+
+
+class AlmacenSinGuardar(AlmacenCuentas):
+    """A store whose first ``actualizar_tokens`` calls fail with ``fallos``."""
+
+    def __init__(self, fallos):
+        super().__init__()
+        self.fallos = list(fallos)
+        self.intentos = 0
+
+    def actualizar_tokens(self, id, tokens):
+        self.intentos += 1
+        if self.fallos:
+            raise self.fallos.pop(0)
+        super().actualizar_tokens(id, tokens)
+
+
+@pytest.mark.parametrize(
+    "error", [ErrorCuentas(ILEGIBLE), ErrorSecretos("almacén bloqueado")], ids=["cuentas", "secretos"]
+)
+def test_rotated_tokens_survive_a_failed_save(renovar, caplog, error):
+    almacen = AlmacenSinGuardar([error, error])
+    cuenta = _cuenta(expira_en=60)
+    almacen.guardar(cuenta)
+    obtener = proveedor_token(almacen, cuenta.id)
+
+    with caplog.at_level("WARNING"):
+        assert obtener() == "acc-nuevo-1"  # the save failed, the new token is still used
+    assert renovar.llamadas == [("oaiapp-1", "ref-1")]
+    assert almacen.intentos == 1
+    assert any(r.levelname == "WARNING" for r in caplog.records)
+    for secreto in ("acc-1", "ref-1", "acc-nuevo-1", "ref-nuevo-1"):
+        assert secreto not in caplog.text
+    assert AlmacenCuentas().obtener(cuenta.id).refresh_token == "ref-1"
+
+    # Within the margin: no new refresh (the old refresh token is spent), the
+    # in-memory token is used and the save is retried (failing again).
+    assert obtener() == "acc-nuevo-1"
+    assert len(renovar.llamadas) == 1
+    assert almacen.intentos == 2
+
+    # The next call (another provider of the same account) saves them.
+    assert proveedor_token(almacen, cuenta.id)() == "acc-nuevo-1"
+    assert almacen.intentos == 3
+    guardada = AlmacenCuentas().obtener(cuenta.id)
+    assert (guardada.access_token, guardada.refresh_token) == ("acc-nuevo-1", "ref-nuevo-1")
+    assert proveedor_token(almacen, cuenta.id)() == "acc-nuevo-1"
+    assert almacen.intentos == 3
+    assert len(renovar.llamadas) == 1
+
+
+def test_unsaved_tokens_are_refreshed_with_their_own_refresh_token(monkeypatch):
+    falso = Renovar()
+    monkeypatch.setattr(sesion_chatgpt, "renovar", falso)
+    almacen = AlmacenSinGuardar([ErrorCuentas(ILEGIBLE), ErrorCuentas(ILEGIBLE)])
+    cuenta = _cuenta(expira_en=60)
+    almacen.guardar(cuenta)
+    reloj = [time.time()]
+    obtener = proveedor_token(almacen, cuenta.id, reloj=lambda: reloj[0])
+
+    assert obtener() == "acc-nuevo-1"
+    reloj[0] += 3600  # the in-memory token is about to expire too
+    assert obtener() == "acc-nuevo-2"
+
+    assert falso.llamadas == [("oaiapp-1", "ref-1"), ("oaiapp-1", "ref-nuevo-1")]
+    guardada = AlmacenCuentas().obtener(cuenta.id)
+    assert (guardada.access_token, guardada.refresh_token) == ("acc-nuevo-2", "ref-nuevo-2")
+
+
+# ----- signing out -----
+
+
+class Revocar:
+    def __init__(self, resultado=True):
+        self.resultado = resultado
+        self.llamadas: list[tuple[str, str]] = []
+
+    def __call__(self, client_id, refresh_token, http_client=None):
+        self.llamadas.append((client_id, refresh_token))
+        if isinstance(self.resultado, Exception):
+            raise self.resultado
+        return self.resultado
+
+
+def test_sign_out_waits_for_a_refresh_in_flight_and_revokes_the_rotated_token(monkeypatch):
+    entro, liberar, cerrado = threading.Event(), threading.Event(), threading.Event()
+
+    class RenovarRetenido(Renovar):
+        def __call__(self, client_id, refresh_token, http_client=None):
+            entro.set()
+            assert liberar.wait(10)
+            return super().__call__(client_id, refresh_token, http_client)
+
+    falso = RenovarRetenido()
+    monkeypatch.setattr(sesion_chatgpt, "renovar", falso)
+    almacen, cuenta = _guardada(expira_en=30)
+    revocar = Revocar()
+    resultado: dict = {}
+
+    def pedir_token():
+        resultado["token"] = proveedor_token(almacen, cuenta.id)()
+
+    def salir():
+        resultado["confirmado"] = sesion_chatgpt.cerrar_sesion_cuenta(AlmacenCuentas(), cuenta.id, revocar)
+        cerrado.set()
+
+    hilo_token = threading.Thread(target=pedir_token)
+    hilo_token.start()
+    assert entro.wait(10)
+    hilo_salir = threading.Thread(target=salir)
+    hilo_salir.start()
+    assert not cerrado.wait(0.3)  # sign-out waits for the refresh holding the lock
+    liberar.set()
+    hilo_token.join(10)
+    hilo_salir.join(10)
+
+    assert resultado == {"token": "acc-nuevo-1", "confirmado": True}
+    assert revocar.llamadas == [("oaiapp-1", "ref-nuevo-1")]
+    guardada = AlmacenCuentas().obtener(cuenta.id)
+    assert (guardada.access_token, guardada.refresh_token, guardada.id_token) == ("", "", "")
+    with pytest.raises(ErrorLLM, match=INICIA_SESION):
+        proveedor_token(almacen, cuenta.id)()
+    assert len(falso.llamadas) == 1
+
+
+def test_sign_out_drops_unsaved_tokens_and_revokes_the_newest(renovar):
+    almacen = AlmacenSinGuardar([ErrorCuentas(ILEGIBLE)])
+    cuenta = _cuenta(expira_en=60)
+    almacen.guardar(cuenta)
+    assert proveedor_token(almacen, cuenta.id)() == "acc-nuevo-1"  # kept in memory only
+    revocar = Revocar()
+
+    assert sesion_chatgpt.cerrar_sesion_cuenta(almacen, cuenta.id, revocar) is True
+
+    assert revocar.llamadas == [("oaiapp-1", "ref-nuevo-1")]
+    with pytest.raises(ErrorLLM, match=INICIA_SESION):
+        proveedor_token(almacen, cuenta.id)()
+    assert almacen.intentos == 1  # never written back after the sign-out
+    assert AlmacenCuentas().obtener(cuenta.id).conectada is False
+
+
+@pytest.mark.parametrize("resultado", [False, RuntimeError("falló")], ids=["sin-confirmar", "lanza"])
+def test_sign_out_always_forgets_the_tokens(renovar, resultado):
+    almacen, cuenta = _guardada()
+    revocar = Revocar(resultado)
+
+    assert sesion_chatgpt.cerrar_sesion_cuenta(almacen, cuenta.id, revocar) is False
+
+    assert revocar.llamadas == [("oaiapp-1", "ref-1")]
+    assert AlmacenCuentas().obtener(cuenta.id).conectada is False
+
+
+def test_sign_out_of_a_signed_out_account_revokes_nothing(renovar):
+    almacen, cuenta = _guardada()
+    almacen.olvidar_tokens(cuenta.id)
+    revocar = Revocar()
+
+    assert sesion_chatgpt.cerrar_sesion_cuenta(almacen, cuenta.id, revocar) is True
+    assert revocar.llamadas == []
 
 
 # ----- connecting -----

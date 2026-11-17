@@ -350,6 +350,61 @@ def test_failing_replace_leaves_previous_file_intact(datos, almacen_seguro, monk
     assert AlmacenCuentas().listar() == [c]
 
 
+def test_temp_file_is_fsynced_before_replacing(datos, almacen_seguro, monkeypatch):
+    almacen = AlmacenCuentas()
+    almacen.guardar(cuenta())
+    temporal = datos / "chatgpt.bin.tmp"
+    eventos: list[str] = []
+    fsync, replace = os.fsync, os.replace
+
+    def espiar_fsync(fd):
+        if temporal.exists() and os.path.samestat(os.fstat(fd), os.stat(temporal)):
+            eventos.append("fsync-temporal")
+        fsync(fd)
+
+    def espiar_replace(origen, destino):
+        eventos.append("replace")
+        replace(origen, destino)
+
+    monkeypatch.setattr(os, "fsync", espiar_fsync)
+    monkeypatch.setattr(os, "replace", espiar_replace)
+    almacen.guardar(cuenta(subject="otra"))
+
+    assert eventos == ["fsync-temporal", "replace"]
+    assert len(AlmacenCuentas().listar()) == 2
+
+
+def test_failing_fsync_leaves_previous_file_intact(datos, almacen_seguro, monkeypatch):
+    almacen = AlmacenCuentas()
+    c = cuenta()
+    almacen.guardar(c)
+    antes = archivo(datos).read_bytes()
+
+    def falla(fd):
+        raise OSError("disco lleno")
+
+    with monkeypatch.context() as parche:
+        parche.setattr(os, "fsync", falla)
+        with pytest.raises(OSError):
+            almacen.guardar(cuenta(subject="otra"))
+    assert archivo(datos).read_bytes() == antes
+    assert sorted(p.name for p in datos.iterdir()) == ["chatgpt.bin"]
+    assert AlmacenCuentas().listar() == [c]
+
+
+def test_reprs_never_show_the_tokens():
+    from app.auth_chatgpt import ResultadoSesion, Tokens
+
+    c = cuenta()
+    resultado = ResultadoSesion("cli-1", "ana@example.com", "sub-1", "idt-secreto-1", "acc-secreto-1", "ref-secreto-1", 1, [PLAN])
+    tokens = Tokens("acc-secreto-1", "ref-secreto-1", 1, [PLAN])
+    for objeto in (c, resultado, tokens):
+        texto = repr(objeto)
+        for secreto in ("idt-secreto-1", "acc-secreto-1", "ref-secreto-1"):
+            assert secreto not in texto
+    assert "ana@example.com" in repr(c) and c.id in repr(c)
+
+
 def test_explicit_path_is_used(tmp_path, almacen_seguro):
     ruta = tmp_path / "otro" / "cuentas.bin"
     ruta.parent.mkdir()

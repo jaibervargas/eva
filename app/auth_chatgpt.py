@@ -73,6 +73,7 @@ _CODIGOS_SESION_VENCIDA = frozenset(
 )
 
 MENSAJE_LISTO = "Listo. Ya puedes volver a Eva."
+MENSAJE_ENLACE_VIEJO = "Este enlace de inicio de sesión ya no sirve."
 MENSAJE_NO_AUTORIZASTE = "No autorizaste a Eva en ChatGPT."
 MENSAJE_NO_AUTORIZO = "ChatGPT no autorizó el inicio de sesión."
 MENSAJE_REGISTRO = "ChatGPT no completó el registro de Eva. Inténtalo de nuevo."
@@ -145,23 +146,28 @@ class _Servidor(ThreadingHTTPServer):
         self.terminado = threading.Event()
         self._candado = threading.Lock()
 
-    def registrar(self, consulta: dict[str, list[str]]) -> str:
-        """Record the first callback and return the text for the browser page."""
+    def registrar(self, consulta: dict[str, list[str]]) -> tuple[int, str]:
+        """Record the first valid callback; return the status and text for the page.
+
+        A callback without this attempt's ``state`` (a stale tab, another
+        attempt) is answered and ignored: the sign-in keeps waiting.
+        """
+        state = consulta.get("state", [""])[0]
+        if not secrets.compare_digest(state.encode(), self.state.encode()):
+            return 400, MENSAJE_ENLACE_VIEJO
         with self._candado:
             if self.terminado.is_set():
-                return MENSAJE_NO_AUTORIZO
+                return 200, MENSAJE_NO_AUTORIZO
             codigo, client_id, error = self._evaluar(consulta)
             self.codigo, self.client_id, self.error = codigo, client_id, error
             self.terminado.set()
-            return error or MENSAJE_LISTO
+            return 200, error or MENSAJE_LISTO
 
     def _evaluar(self, consulta: dict[str, list[str]]) -> tuple[str | None, str | None, str | None]:
-        state = consulta.get("state", [""])[0]
+        """Outcome of a callback whose ``state`` already matched."""
         codigo = consulta.get("code", [""])[0]
         error = consulta.get("error", [""])[0]
         client_id = consulta.get("client_id", [""])[0]
-        if not secrets.compare_digest(state.encode(), self.state.encode()):
-            return None, None, MENSAJE_NO_AUTORIZO
         if error == "access_denied":
             return None, None, MENSAJE_NO_AUTORIZASTE
         if error or not codigo:
@@ -186,7 +192,7 @@ class _ManejadorCallback(BaseHTTPRequestHandler):
         if partes.path != RUTA_CALLBACK:
             self._responder(404, "No encontrado.")
             return
-        self._responder(200, self.server.registrar(parse_qs(partes.query)))
+        self._responder(*self.server.registrar(parse_qs(partes.query)))
 
     def _responder(self, estado: int, mensaje: str) -> None:
         cuerpo = _pagina(mensaje)
@@ -322,7 +328,7 @@ def _canjear(
                 "resource": RESOURCE,
             },
         )
-    except httpx.TransportError as exc:
+    except httpx.HTTPError as exc:  # transport or decoding: OpenAI's answer never arrived whole
         raise ErrorAuth(MENSAJE_SIN_CONEXION) from exc
     if respuesta.status_code >= 400:
         datos = _json(respuesta)
@@ -337,14 +343,26 @@ def _canjear(
 
 
 def _validar_id_token(cliente: httpx.Client, id_token: str, client_id: str, nonce: str) -> dict:
-    """Verify the ID token's signature, issuer, audience, expiry and nonce."""
+    """Verify the ID token's signature, issuer, audience, expiry and nonce.
+
+    Only a problem with the token itself is an identity error; failing to
+    fetch OpenAI's keys is a connection or availability problem.
+    """
     try:
         jwks_uri = _descubrir(cliente).get("jwks_uri")
         if not isinstance(jwks_uri, str) or not jwks_uri:
-            raise ValueError("discovery document has no jwks_uri")
+            raise ErrorAuth(MENSAJE_NO_DISPONIBLE)
         respuesta = cliente.get(jwks_uri)
         respuesta.raise_for_status()
-        juego = jwt.PyJWKSet.from_dict(respuesta.json())
+        claves = respuesta.json()
+    except httpx.HTTPStatusError as exc:
+        raise ErrorAuth(MENSAJE_NO_DISPONIBLE) from exc
+    except httpx.HTTPError as exc:
+        raise ErrorAuth(MENSAJE_SIN_CONEXION) from exc
+    except ValueError as exc:  # not JSON: a broken answer, not a bad token
+        raise ErrorAuth(MENSAJE_NO_DISPONIBLE) from exc
+    try:
+        juego = jwt.PyJWKSet.from_dict(claves)
         kid = jwt.get_unverified_header(id_token).get("kid")
         candidatas = [k for k in juego.keys if kid is None or k.key_id == kid]
         if len(candidatas) != 1:
@@ -358,9 +376,7 @@ def _validar_id_token(cliente: httpx.Client, id_token: str, client_id: str, nonc
             leeway=_MARGEN_RELOJ,
             options={"require": ["exp", "iss", "aud", "sub", "nonce"]},
         )
-    except httpx.TransportError as exc:
-        raise ErrorAuth(MENSAJE_SIN_CONEXION) from exc
-    except (httpx.HTTPError, jwt.PyJWTError, ValueError, TypeError, KeyError) as exc:
+    except (jwt.PyJWTError, ValueError, TypeError, KeyError, AttributeError) as exc:
         raise ErrorAuth(MENSAJE_IDENTIDAD) from exc
     if not isinstance(reclamos.get("nonce"), str) or not secrets.compare_digest(
         reclamos["nonce"].encode(), nonce.encode()
@@ -454,25 +470,35 @@ def iniciar_sesion_chatgpt(
 
     def completar(cliente: httpx.Client) -> ResultadoSesion:
         datos = _canjear(cliente, codigo, verifier, client_emitido, redirect_uri)
-        if cancelado is not None and cancelado.is_set():
-            raise ErrorAuth(MENSAJE_CANCELADO)
-        reclamos = _validar_id_token(cliente, datos["id_token"], client_emitido, nonce)
-        if subject_esperado is not None and reclamos["sub"] != subject_esperado:
-            raise ErrorAuth(MENSAJE_OTRA_CUENTA)
-        return ResultadoSesion(
-            client_id=client_emitido,
-            email=_correo(reclamos),
-            subject=reclamos["sub"],
-            id_token=datos["id_token"],
-            access_token=datos["access_token"],
-            refresh_token=datos["refresh_token"],
-            expira=_expira(datos),
-            scopes=_scopes(datos),
-        )
+        try:
+            if cancelado is not None and cancelado.is_set():
+                raise ErrorAuth(MENSAJE_CANCELADO)
+            reclamos = _validar_id_token(cliente, datos["id_token"], client_emitido, nonce)
+            if subject_esperado is not None and reclamos["sub"] != subject_esperado:
+                raise ErrorAuth(MENSAJE_OTRA_CUENTA)
+            resultado = ResultadoSesion(
+                client_id=client_emitido,
+                email=_correo(reclamos),
+                subject=reclamos["sub"],
+                id_token=datos["id_token"],
+                access_token=datos["access_token"],
+                refresh_token=datos["refresh_token"],
+                expira=_expira(datos),
+                scopes=_scopes(datos),
+            )
+            if cancelado is not None and cancelado.is_set():
+                raise ErrorAuth(MENSAJE_CANCELADO)
+            return resultado
+        except Exception:
+            # The tokens are discarded: revoke them so they do not stay valid.
+            cerrar_sesion(client_emitido, datos["refresh_token"], http_client=cliente)
+            raise
 
     resultado = _con_cliente(http_client, completar)
     if cancelado is not None and cancelado.is_set():
-        raise ErrorAuth(MENSAJE_CANCELADO)  # the new tokens are discarded, never returned
+        # Cancelled while the HTTP client closed: discard and revoke the tokens.
+        cerrar_sesion(client_emitido, resultado.refresh_token, http_client=http_client)
+        raise ErrorAuth(MENSAJE_CANCELADO)
     return resultado
 
 
@@ -500,7 +526,7 @@ def renovar(client_id: str, refresh_token: str, http_client: httpx.Client | None
 
     try:
         respuesta = _con_cliente(http_client, pedir)
-    except httpx.TransportError as exc:
+    except httpx.HTTPError as exc:  # transport or decoding: OpenAI's answer never arrived whole
         raise ErrorAuth(MENSAJE_SIN_CONEXION) from exc
     datos = _json(respuesta)
     if respuesta.status_code >= 500:
