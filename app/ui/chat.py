@@ -6,9 +6,11 @@ import threading
 import flet as ft
 
 from app.config import PROVEEDORES, Config
-from app.llm.base import ErrorLLM
+from app.llm.base import ClienteLLM, ErrorLLM
+from app.llm.cloud_client import conectar_nube
 from app.llm.conversacion import Conversacion, MemoriaUsuario
-from app.llm.local_client import ClienteLocal, conectar
+from app.llm.local_client import conectar
+from app.secretos import ErrorSecretos, leer_clave
 from app.memory.history import Historial
 from app.ui.ajustes import DialogoAjustes
 from app.ui.recuerdos import DialogoRecuerdos
@@ -60,7 +62,7 @@ class PantallaChat:
         self.config = config
         # Long-term memory (Engram); None when it could not even be created.
         self.memoria = memoria
-        self.cliente: ClienteLocal | None = None
+        self.cliente: ClienteLLM | None = None
         self.conversacion_id: int | None = None  # None: new, not yet saved
         # True while connecting or answering: send, new, open and settings wait.
         self.ocupado = False
@@ -238,11 +240,16 @@ class PantallaChat:
         self.page.update()
 
     def _conectar(self) -> None:
-        proveedor = PROVEEDORES[self.config.proveedor].nombre
+        datos = PROVEEDORES[self.config.proveedor]
+        proveedor = datos.nombre
         try:
-            self.cliente = conectar(self.config.servidor, self.config.modelo)
+            if datos.nube:
+                clave = leer_clave(self.config.proveedor)
+                self.cliente = conectar_nube(self.config.proveedor, self.config.modelo, clave)
+            else:
+                self.cliente = conectar(self.config.servidor, self.config.modelo)
         except Exception as exc:
-            if isinstance(exc, ErrorLLM):
+            if isinstance(exc, (ErrorLLM, ErrorSecretos)):
                 mensaje = str(exc)
             else:
                 log.exception("Error inesperado al conectar con el modelo")
