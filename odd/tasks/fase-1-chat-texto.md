@@ -16,9 +16,9 @@ Branch: `feat/fase-1-chat-texto`. Cloud client is deferred to Phase 2 (user deci
 ## Tasks
 
 - T1 [S1] Verify LM Studio server — done (5 models listed; qwen3 streams reasoning in `reasoning_content`, answer in `content`).
-- T2 [S2,S3,S6] `app/llm/base.py` + `app/llm/local_client.py` + pytest with fake server — inline — commit: pending
-- T3 [S4] `app/llm/prompts.py` system prompt — inline — commit: pending
-- T4 [S5,S6] `app/ui/chat.py` + wire `app/main.py`, manual run against LM Studio — inline — commit: pending
+- T2 [S2,S3,S6] `app/llm/base.py` + `app/llm/local_client.py` + pytest with fake server — inline — done, commit 6e8dbe5
+- T3 [S4] `app/llm/prompts.py` system prompt + `app/llm/conversacion.py` — inline — done, commit c8c130c
+- T4 [S5,S6] `app/ui/chat.py` + wire `app/main.py` — inline — done (window starts clean; visual check by the user pending), commit: see git log
 - T5 [S7] cloud client — deferred to Phase 2
 
 ## Log
@@ -26,3 +26,4 @@ Branch: `feat/fase-1-chat-texto`. Cloud client is deferred to Phase 2 (user deci
 - L1 (user): "vale ahora cuentame con que podemos seguir de acuerdo al plan de trabajo"
 - L2 (user): "sigamos con el orden que me dices" — accepts proposal: check LM Studio, base.py, local_client.py with pytest, system prompt, chat screen with streaming; cloud client deferred to the end of the phase or Phase 2 (recommended: local only).
 - L3: openai 3.52.0 and pytest 9.2.0 installed in venv.
+- L4: Evidence — 10 pytest tests pass; real LM Studio smoke run streams '¡Hola! Estoy bien, gracias. ¿Cómo estás tú?'; offline server raises the ErrorLLM message; `python -m app.main` runs 20 s with DeprecationWarning as error and no output. Run command changed from `python app/main.py` to `python -m app.main` (README updated).
