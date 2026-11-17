@@ -18,6 +18,8 @@ class Proveedor:
     nombre: str
     url: str = ""  # local servers only; cloud addresses live in app.llm.cloud_client
     nube: bool = False  # cloud providers need a key kept in the OS keyring
+    # Signed in with a saved account instead of a key (ChatGPT's plan).
+    cuenta: bool = False
 
 
 # Local model servers with an OpenAI-compatible API, then the cloud providers.
@@ -28,6 +30,7 @@ PROVEEDORES = {
     "anthropic": Proveedor("Claude", nube=True),
     "gemini": Proveedor("Gemini", nube=True),
     "openrouter": Proveedor("OpenRouter", nube=True),
+    "chatgpt": Proveedor("ChatGPT", nube=True, cuenta=True),
 }
 PROVEEDOR_POR_DEFECTO = "lmstudio"
 

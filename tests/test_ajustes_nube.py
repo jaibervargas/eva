@@ -72,7 +72,7 @@ def _config_en_disco(datos):
 # ----- config -----
 
 
-def test_the_four_cloud_providers_are_offered_after_the_local_ones():
+def test_the_cloud_providers_are_offered_after_the_local_ones():
     assert [(k, p.nombre, p.nube) for k, p in PROVEEDORES.items()] == [
         ("lmstudio", "LM Studio", False),
         ("ollama", "Ollama", False),
@@ -80,6 +80,7 @@ def test_the_four_cloud_providers_are_offered_after_the_local_ones():
         ("anthropic", "Claude", True),
         ("gemini", "Gemini", True),
         ("openrouter", "OpenRouter", True),
+        ("chatgpt", "ChatGPT", True),
     ]
 
 

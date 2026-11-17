@@ -1,7 +1,8 @@
 """Settings dialog: choose a local or cloud provider and one of its models.
 
 Cloud providers need an API key (or, for OpenRouter, a sign-in); keys go to
-the OS keyring through ``app.secretos``, never to ``config.json``.
+the OS keyring through ``app.secretos``, never to ``config.json``. ChatGPT uses
+a saved account instead (see ``app.ui.panel_chatgpt``).
 """
 
 import logging
@@ -16,6 +17,7 @@ from app.llm.base import ErrorLLM
 from app.llm.cloud_client import crear_cliente
 from app.llm.local_client import ClienteLocal
 from app.secretos import ErrorSecretos, borrar_clave, guardar_clave, leer_clave
+from app.ui.panel_chatgpt import PanelChatGPT
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +61,7 @@ class DialogoAjustes:
         self.modelo = ft.Dropdown(label="Modelo", options=[], expand=True)
         # Selectable so the sign-in address can be copied when no browser opens.
         self.estado = ft.Text("", size=12, color=GRIS_TEXTO, selectable=True)
+        self.chatgpt = PanelChatGPT(page, self.estado, self._cargar_modelos, self._vaciar_modelos)
         self.boton_guardar = ft.FilledButton("Guardar", on_click=self._guardar)
         self.dialogo = ft.AlertDialog(
             modal=True,
@@ -67,6 +70,7 @@ class DialogoAjustes:
                 [
                     ft.Row([self.proveedor]),
                     self.fila_nube,
+                    self.chatgpt.contenedor,
                     ft.Row(
                         [
                             self.modelo,
@@ -93,8 +97,14 @@ class DialogoAjustes:
     def _es_nube(self, proveedor: str | None = None) -> bool:
         return PROVEEDORES[proveedor or self.proveedor.value].nube
 
+    def _con_clave(self, proveedor: str | None = None) -> bool:
+        """A cloud provider used with an API key (not with a saved account)."""
+        datos = PROVEEDORES[proveedor or self.proveedor.value]
+        return datos.nube and not datos.cuenta
+
     def _mostrar_campos(self) -> None:
-        self.fila_nube.visible = self._es_nube()
+        self.fila_nube.visible = self._con_clave()
+        self.chatgpt.contenedor.visible = PROVEEDORES[self.proveedor.value].cuenta
         self.boton_openrouter.visible = self.proveedor.value == "openrouter"
 
     def _cambio_proveedor(self, e) -> None:
@@ -117,14 +127,29 @@ class DialogoAjustes:
         self.estado.value, self.estado.color = CONECTANDO, GRIS_TEXTO
         self.boton_guardar.disabled = True
         self.page.update()
-        self.page.run_thread(self._buscar_modelos, proveedor, self._carga, (self.clave.value or "").strip())
+        self.page.run_thread(
+            self._buscar_modelos, proveedor, self._carga, (self.clave.value or "").strip(), self.chatgpt.cuenta.value
+        )
 
-    def _buscar_modelos(self, proveedor: str, carga: int = 0, clave_escrita: str = "") -> None:
+    def _vaciar_modelos(self) -> None:
+        """No models (e.g. after signing out); any load still running is dropped."""
+        self._carga = getattr(self, "_carga", 0) + 1
+        self.modelo.options, self.modelo.value = [], None
+        self.boton_guardar.disabled = True
+
+    def _buscar_modelos(
+        self, proveedor: str, carga: int = 0, clave_escrita: str = "", cuenta: str | None = None
+    ) -> None:
         datos = PROVEEDORES[proveedor]
         aviso = None  # a gray hint instead of a red error
+        error = None
         guardada = None
+        consulta = None  # ChatGPT's accounts
         try:
-            if datos.nube:
+            if datos.cuenta:
+                consulta = self.chatgpt.consultar(cuenta, self.config.extras.get("chatgpt_cuenta"))
+                modelos, error, aviso = consulta.modelos, consulta.error, consulta.aviso
+            elif datos.nube:
                 guardada = leer_clave(proveedor)
                 clave = clave_escrita or guardada
                 if clave:
@@ -141,11 +166,11 @@ class DialogoAjustes:
             log.exception("Unexpected error listing models")
             modelos = []
             error = f"Ocurrió un error inesperado: {exc}"
-        else:
-            error = None
         if carga != getattr(self, "_carga", carga) or self.proveedor.value != proveedor:
             return  # a newer load (or another provider) started meanwhile; it wins
-        if datos.nube:
+        if consulta is not None:
+            self.chatgpt.mostrar(consulta)
+        elif datos.nube:
             self.clave.hint_text = CLAVE_GUARDADA if guardada else None
         if error is not None:
             self.estado.value, self.estado.color = error, ROJO_ERROR
@@ -161,8 +186,10 @@ class DialogoAjustes:
                 else "El servidor no tiene modelos de chat instalados."
             )
             self.estado.value, self.estado.color = vacio, ROJO_ERROR
-        self.modelo.options = [ft.DropdownOption(key=m, text=m) for m in modelos]
-        self.modelo.value = resolver_modelo(self.config.modelo, modelos) or None
+        # ChatGPT lists (slug, display name); the others just the model id.
+        opciones = [m if isinstance(m, tuple) else (m, m) for m in modelos]
+        self.modelo.options = [ft.DropdownOption(key=clave, text=texto) for clave, texto in opciones]
+        self.modelo.value = resolver_modelo(self.config.modelo, [clave for clave, _ in opciones]) or None
         self.boton_guardar.disabled = not modelos
         self.page.update()
 
@@ -206,6 +233,7 @@ class DialogoAjustes:
     def _cancelar_inicio_sesion(self) -> None:
         if self._inicio_sesion is not None:
             self._inicio_sesion.set()
+        self.chatgpt.cancelar()
 
     def _mostrar_direccion(self, cancelado: threading.Event, url: str) -> None:
         """No browser opened: show the address; the sign-in keeps waiting."""
@@ -249,7 +277,7 @@ class DialogoAjustes:
         proveedor = self.proveedor.value
         clave = (self.clave.value or "").strip()
         try:
-            if self._es_nube(proveedor) and clave:
+            if self._con_clave(proveedor) and clave:
                 guardar_clave(proveedor, clave)
         except ErrorSecretos as exc:
             self.estado.value, self.estado.color = str(exc), ROJO_ERROR
@@ -257,7 +285,12 @@ class DialogoAjustes:
             return
         modelo = self.modelo.value or ""
         extras = dict(self.config.extras)
-        if self._es_nube(proveedor):
+        if PROVEEDORES[proveedor].cuenta:
+            # Only the account id: its tokens stay in the encrypted account file.
+            cuenta = self.chatgpt.cuenta.value
+            extras["chatgpt_cuenta"] = cuenta
+            extras["respaldo"] = {"proveedor": proveedor, "modelo": modelo, "cuenta": cuenta}
+        elif self._es_nube(proveedor):
             # The last cloud model saved also extracts memories when the local
             # model fails (no key here: it stays in the keyring).
             extras["respaldo"] = {"proveedor": proveedor, "modelo": modelo}
