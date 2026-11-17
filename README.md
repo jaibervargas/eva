@@ -187,7 +187,7 @@ de recargar) para ver sus modelos. Con OpenRouter también puedes pulsar
 **Iniciar sesión con OpenRouter**: se abre el navegador, entras con tu cuenta y
 Eva recibe una clave ligada a ella (el límite de gasto lo fijas tú en OpenRouter;
 un segundo clic cancela; si el navegador no se abre, Eva muestra la dirección para
-que la abras tú). Las claves se guardan en el almacén seguro del sistema
+que la abras tú y sigue esperando, así el inicio de sesión se completa igual). Las claves se guardan en el almacén seguro del sistema
 (Administrador de credenciales en Windows, Llavero en Mac), **nunca** en
 `config.json`; si ya hay una guardada, el campo dice "Clave guardada" y
 **Borrar clave** la elimina. No se usan las suscripciones Claude Pro/Max ni Google

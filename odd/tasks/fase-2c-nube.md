@@ -30,6 +30,9 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 2) are verbatim; decisions below them
   (e) R3-006: read/write/pool timeouts from a reachable provider give "<Proveedor> tardó demasiado en responder. Inténtalo de nuevo." (before the answer starts) instead of the no-connection message; connect errors keep "No pude conectarme con <Proveedor>. Revisa tu conexión a internet."; a timeout mid-answer keeps the lost-connection message.
   R3-002 (first bad callback aborts) stays as is by design.
 
+- S8 (T6 review advisory R3-001/R4-001, user chose "1.A": keep the server waiting and show the URL so the manual path works).
+  Design: `iniciar_sesion_openrouter(..., al_sin_navegador: Callable[[str], None] | None = None)`. When `abrir_navegador` returns False or raises: if `al_sin_navegador` is given, call it with the auth URL and keep waiting for the callback (same timeout and cancel as usual; the server stays open; the exchange works when the user opens the URL by hand); if it is not given, raise `ErrorAuth("No pude abrir el navegador. Revisa que tengas uno instalado e inténtalo de nuevo.")` at once and close the server. The settings dialog passes a callback that shows, in `estado` (gray, selectable text), "No pude abrir el navegador. Abre esta dirección para iniciar sesión con OpenRouter: <url>"; the button stays as "Cancelar inicio de sesión". The S7(d) message that promised a manual path with the server already closed is removed. Advisories R1-001/R3-002 (key not revoked on cancel) and R1-002/R3-003 (tiny cancel race) stay as they are (no user change requested).
+
 ## Tasks
 
 - T1 [S1, S2] `app/llm/cloud_client.py`, `app/secretos.py`, requirements, tests — route: gentle-ai-worker (parallel with T2) — done, commit 74a632e (see L6)
@@ -39,6 +42,8 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 2) are verbatim; decisions below them
 - T5 [S6] docs/plan + README, independent verify (Risk items 2 credentials, 5 dependencies), commits — route: inline + gentle-ai-verify — done, commits 09c08f1 + this one (L10, L11)
 
 - T6 [S7] fix review advisories in app/auth.py, app/ui/ajustes.py, app/llm/cloud_client.py with tests — route: gentle-ai-worker (context backstop) — done (L14)
+
+- T7 [S8] manual sign-in path when the browser cannot open — route: gentle-ai-worker (context backstop) — done (L17)
 
 ## Log
 
@@ -57,3 +62,5 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 2) are verbatim; decisions below them
 - L13 (user): asked to fix the advisories as proposed ("1"); R3-002 kept as is.
 - L14 (T6, worker evidence): first worker run stalled after partial auth edits; continued. RED: test_auth 19 failed (localhost vs 127.0.0.1, raw OSError, 30 s wait), ajustes saved the cancelled key, 12 cloud timeout tests got the no-connection message. GREEN 405 passed, 2 skipped (parent re-ran). Decisions: only an explicit False from abrir_navegador means no browser (None still waits); a timeout while reading the stream keeps the lost-connection message. Masking/no-usable-facts tests passed without code changes (behavior already existed).
 - L15 (native review of T6): lineage review-d53e11c4872b7306 (base 13ba65e, commit 7be4abc) approved and acknowledged. 6 non-blocking advisories: R1-001/R3-002 a key minted before a cancel is discarded but not revoked at OpenRouter; R1-002/R3-003 tiny race between the cancel check and guardar_clave; R3-001/R4-001 the no-browser message asks to open the URL by hand but the callback server is already closed, so that path cannot complete (spec S7(d) design error by the parent). Pending user decision.
+- L16 (user): "1.A" (keep the server waiting and show the URL).
+- L17 (T7, worker evidence): RED 9 failed (old message, unknown al_sin_navegador, no callback in ajustes); GREEN 412 passed, 2 skipped (parent re-ran). `estado` text is selectable for every message; the callback is ignored after a cancel or a newer sign-in.

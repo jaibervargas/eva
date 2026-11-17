@@ -26,6 +26,7 @@ CLAVE_GUARDADA = "Clave guardada"
 INICIAR_OPENROUTER = "Iniciar sesión con OpenRouter"
 CANCELAR_OPENROUTER = "Cancelar inicio de sesión"
 ESPERANDO_NAVEGADOR = "Esperando el inicio de sesión en el navegador…"
+ABRE_LA_DIRECCION = "No pude abrir el navegador. Abre esta dirección para iniciar sesión con OpenRouter: {url}"
 
 
 class DialogoAjustes:
@@ -56,7 +57,8 @@ class DialogoAjustes:
             tight=True,
         )
         self.modelo = ft.Dropdown(label="Modelo", options=[], expand=True)
-        self.estado = ft.Text("", size=12, color=GRIS_TEXTO)
+        # Selectable so the sign-in address can be copied when no browser opens.
+        self.estado = ft.Text("", size=12, color=GRIS_TEXTO, selectable=True)
         self.boton_guardar = ft.FilledButton("Guardar", on_click=self._guardar)
         self.dialogo = ft.AlertDialog(
             modal=True,
@@ -205,9 +207,20 @@ class DialogoAjustes:
         if self._inicio_sesion is not None:
             self._inicio_sesion.set()
 
+    def _mostrar_direccion(self, cancelado: threading.Event, url: str) -> None:
+        """No browser opened: show the address; the sign-in keeps waiting."""
+        if self._inicio_sesion is not cancelado or cancelado.is_set():
+            return
+        self.estado.value = ABRE_LA_DIRECCION.format(url=url)
+        self.estado.color = GRIS_TEXTO
+        self.page.update()
+
     def _esperar_inicio_sesion(self, cancelado: threading.Event) -> None:
         try:
-            clave = iniciar_sesion_openrouter(cancelado=cancelado)
+            clave = iniciar_sesion_openrouter(
+                cancelado=cancelado,
+                al_sin_navegador=lambda url: self._mostrar_direccion(cancelado, url),
+            )
             # Cancelling (dialog closed, provider changed, second click) is
             # honoured until the key is saved.
             if cancelado.is_set():

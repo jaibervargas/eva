@@ -204,7 +204,7 @@ def test_a_broken_keyring_while_loading_shows_its_error(monkeypatch):
 
 
 def test_signing_in_with_openrouter_saves_its_key_and_lists_models(monkeypatch, almacen):
-    monkeypatch.setattr(ajustes, "iniciar_sesion_openrouter", lambda cancelado=None: "sk-or-1")
+    monkeypatch.setattr(ajustes, "iniciar_sesion_openrouter", lambda cancelado=None, al_sin_navegador=None: "sk-or-1")
     nube = NubeFalsa(modelos=["anthropic/claude-x"], claves=["sk-or-1"])
     dialogo, *_ = _dialogo(monkeypatch, Config(proveedor="openrouter"), nube=nube)
     dialogo._iniciar_sesion(None)
@@ -218,7 +218,7 @@ def test_signing_in_with_openrouter_saves_its_key_and_lists_models(monkeypatch, 
 
 
 def test_a_failed_openrouter_sign_in_shows_why_and_saves_nothing(monkeypatch, almacen):
-    def falla(cancelado=None):
+    def falla(cancelado=None, al_sin_navegador=None):
         raise ErrorAuth("OpenRouter no autorizó el inicio de sesión.")
 
     monkeypatch.setattr(ajustes, "iniciar_sesion_openrouter", falla)
@@ -232,7 +232,7 @@ def test_a_failed_openrouter_sign_in_shows_why_and_saves_nothing(monkeypatch, al
 def test_the_sign_in_button_cancels_a_pending_sign_in(monkeypatch, almacen):
     recibido: list[threading.Event] = []
 
-    def espera(cancelado=None):
+    def espera(cancelado=None, al_sin_navegador=None):
         recibido.append(cancelado)
         if cancelado is not None and cancelado.is_set():
             raise ErrorAuth(MENSAJE_CANCELADO)
@@ -256,7 +256,9 @@ def test_the_sign_in_button_cancels_a_pending_sign_in(monkeypatch, almacen):
 
 def test_closing_the_dialog_cancels_a_pending_sign_in(monkeypatch, almacen):
     recibido: list[threading.Event] = []
-    monkeypatch.setattr(ajustes, "iniciar_sesion_openrouter", lambda cancelado=None: recibido.append(cancelado))
+    monkeypatch.setattr(
+        ajustes, "iniciar_sesion_openrouter", lambda cancelado=None, al_sin_navegador=None: recibido.append(cancelado)
+    )
     page = FakePage(ejecutar=False)
     dialogo, _, page, _ = _dialogo(monkeypatch, Config(proveedor="openrouter"), page=page)
     dialogo._iniciar_sesion(None)
@@ -272,7 +274,7 @@ def test_a_sign_in_cancelled_while_the_key_arrives_saves_nothing(monkeypatch, al
     # exchange) and the login still hands back a key: it must not be saved.
     dialogos: list[DialogoAjustes] = []
 
-    def cerrar_y_devolver(cancelado=None):
+    def cerrar_y_devolver(cancelado=None, al_sin_navegador=None):
         dialogos[0]._cancelar(None)
         return "sk-or-1"
 
@@ -290,6 +292,37 @@ def test_a_sign_in_cancelled_while_the_key_arrives_saves_nothing(monkeypatch, al
     assert dialogo.boton_openrouter.content == "Iniciar sesión con OpenRouter"
     assert page.dialogos == []
     assert aplicadas == []
+
+
+def test_without_a_browser_the_sign_in_url_is_shown_and_the_sign_in_still_completes(monkeypatch, almacen):
+    url = "https://openrouter.ai/auth?callback_url=http%3A%2F%2F127.0.0.1%3A5555%2Fcallback&state=s"
+    dialogos: list[DialogoAjustes] = []
+    vistos: list[tuple] = []
+
+    def sin_navegador(cancelado=None, al_sin_navegador=None):
+        al_sin_navegador(url)
+        d = dialogos[0]
+        vistos.append((d.estado.value, d.estado.color, d.estado.selectable, d.boton_openrouter.content))
+        return "sk-or-1"  # the user opened the URL by hand and signed in
+
+    monkeypatch.setattr(ajustes, "iniciar_sesion_openrouter", sin_navegador)
+    nube = NubeFalsa(modelos=["anthropic/claude-x"], claves=["sk-or-1"])
+    dialogo, *_ = _dialogo(monkeypatch, Config(proveedor="openrouter"), nube=nube)
+    dialogos.append(dialogo)
+    dialogo._iniciar_sesion(None)
+
+    assert vistos == [
+        (
+            "No pude abrir el navegador. Abre esta dirección para iniciar sesión con OpenRouter: " + url,
+            ajustes.GRIS_TEXTO,
+            True,
+            "Cancelar inicio de sesión",
+        )
+    ]
+    assert secretos.leer_clave("openrouter") == "sk-or-1"
+    assert dialogo.estado.value == "1 modelos disponibles en OpenRouter"
+    assert dialogo.modelo.value == "anthropic/claude-x"
+    assert dialogo.boton_openrouter.content == "Iniciar sesión con OpenRouter"
 
 
 # ----- chat connection -----

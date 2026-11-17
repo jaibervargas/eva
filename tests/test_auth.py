@@ -28,7 +28,7 @@ MENSAJE_NO_AUTORIZO = "OpenRouter no autorizó el inicio de sesión."
 MENSAJE_TIMEOUT = "No se completó el inicio de sesión con OpenRouter a tiempo. Inténtalo de nuevo."
 MENSAJE_CANCELADO = "Se canceló el inicio de sesión con OpenRouter."
 MENSAJE_SIN_CONEXION = "No pude conectarme con OpenRouter. Revisa tu conexión a internet."
-MENSAJE_SIN_NAVEGADOR = "No pude abrir el navegador. Abre esta dirección para iniciar sesión con OpenRouter: {url}"
+MENSAJE_SIN_NAVEGADOR = "No pude abrir el navegador. Revisa que tengas uno instalado e inténtalo de nuevo."
 
 
 @dataclass
@@ -276,8 +276,13 @@ def _puerto_de(url):
     return urlsplit(parse_qs(urlsplit(url).query)["callback_url"][0]).port
 
 
-@pytest.mark.parametrize("resultado", [False, OSError("sin navegador")], ids=["devuelve-false", "lanza"])
-def test_when_the_browser_cannot_open_it_fails_at_once_with_the_url(resultado):
+SIN_NAVEGADOR = pytest.mark.parametrize(
+    "resultado", [False, OSError("sin navegador")], ids=["devuelve-false", "lanza"]
+)
+
+
+@SIN_NAVEGADOR
+def test_without_a_browser_and_no_callback_it_fails_at_once(resultado):
     urls: list[str] = []
     inicio = time.monotonic()
 
@@ -291,8 +296,72 @@ def test_when_the_browser_cannot_open_it_fails_at_once_with_the_url(resultado):
     assert time.monotonic() - inicio < 5
     (url,) = urls
     assert url.startswith("https://openrouter.ai/auth?")
-    assert str(exc.value) == MENSAJE_SIN_NAVEGADOR.format(url=url)
+    assert str(exc.value) == MENSAJE_SIN_NAVEGADOR
     assert _puerto_libre(_puerto_de(url))
+
+
+@SIN_NAVEGADOR
+def test_without_a_browser_the_callback_gets_the_url_and_the_manual_path_completes(resultado):
+    urls: list[str] = []
+    mostradas: list[str] = []
+    navegador = NavegadorFalso()  # the user opens the shown URL by hand
+
+    def mostrar(url):
+        mostradas.append(url)
+        navegador(url)
+
+    clave = iniciar_sesion_openrouter(
+        abrir_navegador=_navegador_que_falla(urls, resultado),
+        timeout=5,
+        http_client=OpenRouterFalso(navegador).cliente(),
+        al_sin_navegador=mostrar,
+    )
+    navegador.esperar()
+
+    assert clave == CLAVE
+    assert mostradas == urls
+    assert navegador.respuesta.status_code == 200
+    assert "Listo. Ya puedes volver a Eva." in navegador.respuesta.text
+    assert _puerto_libre(navegador.puerto)
+
+
+@SIN_NAVEGADOR
+def test_without_a_browser_the_manual_wait_can_be_cancelled(resultado):
+    urls: list[str] = []
+    mostradas: list[str] = []
+    cancelado = threading.Event()
+    threading.Timer(0.2, cancelado.set).start()
+
+    with pytest.raises(ErrorAuth) as exc:
+        iniciar_sesion_openrouter(
+            abrir_navegador=_navegador_que_falla(urls, resultado),
+            timeout=30,
+            http_client=httpx.Client(transport=httpx.MockTransport(lambda r: pytest.fail("no exchange"))),
+            cancelado=cancelado,
+            al_sin_navegador=mostradas.append,
+        )
+
+    assert str(exc.value) == MENSAJE_CANCELADO
+    assert mostradas == urls
+    assert _puerto_libre(_puerto_de(urls[0]))
+
+
+@SIN_NAVEGADOR
+def test_without_a_browser_the_manual_wait_times_out(resultado):
+    urls: list[str] = []
+    mostradas: list[str] = []
+
+    with pytest.raises(ErrorAuth) as exc:
+        iniciar_sesion_openrouter(
+            abrir_navegador=_navegador_que_falla(urls, resultado),
+            timeout=0.3,
+            http_client=httpx.Client(transport=httpx.MockTransport(lambda r: pytest.fail("no exchange"))),
+            al_sin_navegador=mostradas.append,
+        )
+
+    assert str(exc.value) == MENSAJE_TIMEOUT
+    assert mostradas == urls
+    assert _puerto_libre(_puerto_de(urls[0]))
 
 
 def test_a_browser_returning_none_still_waits_for_the_callback():

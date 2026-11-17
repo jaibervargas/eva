@@ -38,9 +38,7 @@ MENSAJE_CANCELADO = "Se canceló el inicio de sesión con OpenRouter."
 MENSAJE_SIN_CONEXION = "No pude conectarme con OpenRouter. Revisa tu conexión a internet."
 MENSAJE_RECHAZO = "OpenRouter rechazó el inicio de sesión: {detalle}"
 MENSAJE_SIN_SERVIDOR = "No pude preparar el inicio de sesión con OpenRouter: {detalle}"
-MENSAJE_SIN_NAVEGADOR = (
-    "No pude abrir el navegador. Abre esta dirección para iniciar sesión con OpenRouter: {url}"
-)
+MENSAJE_SIN_NAVEGADOR = "No pude abrir el navegador. Revisa que tengas uno instalado e inténtalo de nuevo."
 
 
 class ErrorAuth(Exception):
@@ -181,13 +179,16 @@ def iniciar_sesion_openrouter(
     timeout: float = TIMEOUT_LOGIN,
     http_client: httpx.Client | None = None,
     cancelado: threading.Event | None = None,
+    al_sin_navegador: Callable[[str], None] | None = None,
 ) -> str:
     """Sign in with the user's OpenRouter account and return its API key.
 
     Blocks until the browser comes back, ``timeout`` seconds pass or
     ``cancelado`` is set (run it off the UI loop); a cancel during the code
-    exchange discards the new key. ``abrir_navegador`` returning ``False`` (as
-    ``webbrowser.open`` does without a browser) or raising fails at once.
+    exchange discards the new key. When ``abrir_navegador`` returns ``False``
+    (as ``webbrowser.open`` does without a browser) or raises,
+    ``al_sin_navegador`` receives the auth URL so the user can open it by hand
+    and the wait goes on as usual; without it the login fails at once.
     Raises ``ErrorAuth`` with a message for the user on any failure. Does not
     save the key.
     """
@@ -213,11 +214,13 @@ def iniciar_sesion_openrouter(
             }
         )
         try:
-            abierto = abrir_navegador(url)
-        except Exception as exc:
-            raise ErrorAuth(MENSAJE_SIN_NAVEGADOR.format(url=url)) from exc
-        if abierto is False:
-            raise ErrorAuth(MENSAJE_SIN_NAVEGADOR.format(url=url))
+            abierto = abrir_navegador(url) is not False
+        except Exception:
+            abierto = False
+        if not abierto:
+            if al_sin_navegador is None:
+                raise ErrorAuth(MENSAJE_SIN_NAVEGADOR)
+            al_sin_navegador(url)  # the server keeps waiting for the manual path
         codigo = _esperar_codigo(servidor, timeout, cancelado)
     finally:
         servidor.shutdown()
