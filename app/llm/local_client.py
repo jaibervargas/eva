@@ -9,6 +9,7 @@ from collections.abc import Iterator
 import httpx
 import openai
 
+from app.config import resolver_modelo
 from app.llm.base import ClienteLLM, ErrorLLM, Mensaje
 
 LMSTUDIO_URL = "http://localhost:1234/v1"
@@ -69,3 +70,16 @@ class ClienteLocal(ClienteLLM):
             f"No pude conectarme con el modelo local en {self.base_url}. "
             "Revisa que LM Studio u Ollama esté abierto con su servidor activo."
         )
+
+
+def conectar(base_url: str, modelo_guardado: str, http_client: httpx.Client | None = None) -> ClienteLocal:
+    """Client for the server, using the saved model if installed, else the first one.
+
+    Raises ``ErrorLLM`` when the server is unreachable or has no chat models.
+    """
+    cliente = ClienteLocal(modelo="", base_url=base_url, http_client=http_client)
+    modelos = cliente.listar_modelos()
+    if not modelos:
+        raise ErrorLLM("El servidor local no tiene modelos de chat. Descarga uno en LM Studio u Ollama.")
+    cliente.modelo = resolver_modelo(modelo_guardado, modelos)
+    return cliente

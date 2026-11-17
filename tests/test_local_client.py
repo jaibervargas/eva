@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from app.llm.base import ClienteLLM, ErrorLLM
-from app.llm.local_client import LMSTUDIO_URL, OLLAMA_URL, ClienteLocal
+from app.llm.local_client import LMSTUDIO_URL, OLLAMA_URL, ClienteLocal, conectar
 
 
 def _sse(chunks: list[dict]) -> bytes:
@@ -115,6 +115,28 @@ def test_listar_modelos_raises_error_llm_on_http_error():
 
     with pytest.raises(ErrorLLM, match="El modelo local devolvió un error"):
         _client(failing).listar_modelos()
+
+
+def _http(server):
+    return httpx.Client(transport=httpx.MockTransport(server))
+
+
+def test_conectar_uses_saved_model_when_installed():
+    server = FakeServer(models=["a", "b"])
+    cliente = conectar(OLLAMA_URL, "b", http_client=_http(server))
+    assert (cliente.modelo, cliente.base_url) == ("b", OLLAMA_URL)
+
+
+def test_conectar_falls_back_to_first_chat_model():
+    server = FakeServer(models=["text-embedding-x", "a", "b"])
+    assert conectar(LMSTUDIO_URL, "borrado", http_client=_http(server)).modelo == "a"
+
+
+def test_conectar_without_chat_models_raises_error_llm():
+    server = FakeServer(models=["text-embedding-x"])
+    with pytest.raises(ErrorLLM) as exc:
+        conectar(LMSTUDIO_URL, "", http_client=_http(server))
+    assert str(exc.value) == "El servidor local no tiene modelos de chat. Descarga uno en LM Studio u Ollama."
 
 
 def test_listar_modelos_skips_embedding_models():
