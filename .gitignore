@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.pytest_cache/
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Local config and secrets (API keys live in the OS keyring, never here)
+config.json
+.env
+
+# Downloaded models and binaries
+models/
+bin/*
+!bin/.gitkeep
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
