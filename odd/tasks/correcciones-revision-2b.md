@@ -15,7 +15,7 @@ Each spec quotes the reviewer claim and states the required behaviour.
 
 ## Tasks
 
-- T1 [S1-S5] Implement test-first — route: gentle-ai-worker — commits: by parent after the worker returns.
+- T1 [S1-S5] Implement test-first — route: gentle-ai-worker — done, commits 115cbd7, 984c9c4
 
 ## Log
 
