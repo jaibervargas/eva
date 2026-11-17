@@ -1,6 +1,6 @@
 # Plan de trabajo – Eva, el asistente de IA de IDEVA
 
-Nov 16, 2026 · @Esperanza
+Nov 16, 2026 · @Esperanza · actualizado el Nov 17, 2026 (bloque 2C terminado)
 
 ## 1. Resumen y objetivos
 
@@ -89,7 +89,8 @@ eva/
 ├── app/
 │   ├── main.py            # Interfaz Flet (punto de entrada)
 │   ├── config.py          # Lee y guarda config.json
-│   ├── auth.py            # Inicio de sesión con ChatGPT y claves guardadas de forma segura
+│   ├── auth.py            # Inicio de sesión con OpenRouter (y con ChatGPT en el bloque 2D)
+│   ├── secretos.py        # Claves y tokens en el almacén seguro del sistema (keyring)
 │   ├── setup_inicial.py   # Revisa Ollama y descarga modelos al primer inicio
 │   ├── ui/
 │   │   ├── chat.py        # Pantalla de chat
@@ -99,7 +100,7 @@ eva/
 │   ├── llm/
 │   │   ├── base.py        # Interfaz común para cualquier modelo
 │   │   ├── local_client.py    # Ollama y LM Studio
-│   │   └── cloud_client.py
+│   │   └── cloud_client.py    # OpenAI, Claude, Gemini y OpenRouter
 │   ├── voice/
 │   │   ├── stt.py         # Voz a texto (faster-whisper)
 │   │   └── tts.py         # Texto a voz (Piper)
@@ -220,21 +221,21 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 2 — Memoria, Engram y ajustes (semanas 3 y 4)
 
-- [ ] Implementar `llm/cloud_client.py` (OpenAI, Claude y Gemini con clave de API), movido desde la Fase 1.
+- [x] Implementar `llm/cloud_client.py` (OpenAI, Claude y Gemini con clave de API), movido desde la Fase 1. *(Claude con el SDK nativo `anthropic`; OpenAI, Gemini y OpenRouter con el SDK `openai` y sus direcciones compatibles oficiales.)*
 - [x] Crear la base SQLite con las tablas `conversaciones` y `mensajes`, guardada en la carpeta del usuario.
 - [x] Guardar cada mensaje y enviar los últimos 20 al modelo como contexto.
 - [x] Agregar en la barra lateral: nueva conversación y lista de conversaciones anteriores.
-- [ ] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`. *(Parcial: ya elige LM Studio u Ollama y el modelo instalado, y guarda en `config.json`; faltan la nube y su forma de acceso (bloque 2C) y la voz (Fase 4).)*
+- [ ] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`. *(Parcial: elige LM Studio, Ollama, OpenAI, Claude, Gemini u OpenRouter, el modelo, y la clave de API o el inicio de sesión con OpenRouter (bloque 2C); faltan la cuenta de ChatGPT (bloque 2D) y la voz (Fase 4).)*
 - [x] Descargar el programa de Engram para Windows, Mac y Linux desde sus versiones publicadas en GitHub y guardarlo en `bin/`. *(`python scripts/descargar_engram.py` baja Engram v3.7.2 y comprueba su SHA-256; con `--plataforma` baja el de otro sistema. Probado en Windows; Mac y Linux se probarán al empaquetar en la Fase 6.)*
 - [x] Implementar `memory/engram_client.py`: la app abre Engram en segundo plano y se conecta a él por MCP con la librería `mcp` de Python. *(Los recuerdos de Eva van en su propia carpeta `engram/`, nunca en la de otro uso de Engram. Falta ubicar el programa dentro de la app empaquetada, en la Fase 6.)*
 - [x] Antes de cada respuesta, buscar en Engram los recuerdos relacionados con la pregunta y agregarlos al contexto del modelo. *(Como Engram busca palabras completas, también se agregan los demás datos conocidos del usuario, hasta 8 recuerdos en total.)*
-- [ ] Después de cada respuesta, guardar en Engram los datos importantes del usuario (nombre, gustos, decisiones). Si el modelo local no detecta bien qué guardar, usar el de la nube solo para esa tarea. *(Parcial: el mismo modelo local extrae los datos en segundo plano, sin demorar el chat; el respaldo con el modelo de la nube queda para el bloque 2C, cuando exista el cliente de la nube.)*
+- [x] Después de cada respuesta, guardar en Engram los datos importantes del usuario (nombre, gustos, decisiones). Si el modelo local no detecta bien qué guardar, usar el de la nube solo para esa tarea. *(El mismo modelo local extrae los datos en segundo plano, sin demorar el chat; si falla o su respuesta no se entiende, se reintenta una vez con el último modelo de la nube guardado en Ajustes.)*
 - [x] Agregar en ajustes una pantalla para ver y borrar recuerdos. *(Botón **Recuerdos** en la barra lateral: lista los recuerdos y borra cada uno para siempre, previa confirmación.)*
-- [ ] Implementar "Iniciar sesión con ChatGPT" en `auth.py` (OAuth con PKCE): la app abre el navegador, el usuario entra con su cuenta y la app usa su plan Plus o Pro. Antes, solicitar el client ID en el portal de desarrolladores de OpenAI.
-- [ ] Para Claude y Gemini, ofrecer clave de API o "Iniciar sesión con OpenRouter" (OAuth con PKCE, sin necesidad de registrar la app): el usuario entra con su cuenta de OpenRouter, la app recibe una clave ligada a esa cuenta y el usuario fija su propio límite de gasto. No se usa la suscripción Claude Pro/Max ni Google AI Pro, porque sus términos no lo permiten en apps de terceros.
-- [ ] Guardar el token de la cuenta y las claves de API con la librería `keyring` (el almacén seguro del sistema operativo), nunca en texto plano dentro de `config.json`.
+- [ ] Implementar "Iniciar sesión con ChatGPT" en `auth.py` (OAuth con PKCE): la app abre el navegador, el usuario entra con su cuenta y la app usa su plan Plus o Pro. *(Bloque 2D. OpenAI ofrece "Sign in with ChatGPT" en vista previa. Como Eva es open-source y se instala en el equipo, no hace falta pedir un client ID: la app se registra sola la primera vez (`client_id=dynamic_agent_client` y un `ext_agent_host_id` propio de cada equipo) y después reusa el client ID que recibe. El plan solo se puede usar con la Responses API (`stream: true`, `store: false`). Si Eva se vendiera o se alojara en un servidor, habría que llenar el formulario de interés de OpenAI.)*
+- [x] Para Claude y Gemini, ofrecer clave de API o "Iniciar sesión con OpenRouter" (OAuth con PKCE, sin necesidad de registrar la app): el usuario entra con su cuenta de OpenRouter, la app recibe una clave ligada a esa cuenta y el usuario fija su propio límite de gasto. No se usa la suscripción Claude Pro/Max ni Google AI Pro, porque sus términos no lo permiten en apps de terceros.
+- [x] Guardar el token de la cuenta y las claves de API con la librería `keyring` (el almacén seguro del sistema operativo), nunca en texto plano dentro de `config.json`.
 
-**Entregable:** el asistente recuerda lo hablado, recuerda datos del usuario entre conversaciones distintas y se configura sin tocar archivos.
+**Entregable:** el asistente recuerda lo hablado, recuerda datos del usuario entre conversaciones distintas y se configura sin tocar archivos. **Estado: bloques 2A, 2B y 2C terminados, revisados y subidos a GitHub (412 pruebas con pytest). Falta el bloque 2D (cuenta de ChatGPT); la voz de los ajustes llega en la Fase 4.**
 
 ### Fase 3 — Escuchar: voz a texto (semana 5)
 
@@ -330,7 +331,8 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 | La app pide permiso de micrófono y el usuario lo niega | Mostrar un mensaje que explique cómo activarlo en la configuración del sistema |
 | El instalador pesa demasiado | Descargar los modelos de voz al primer inicio, no incluirlos en el instalador |
 | Costos de la API en la nube | Usar modelos económicos (GPT-4o mini, Claude Haiku, Gemini Flash) y fijar un límite de gasto en el panel del proveedor |
-| OpenAI cambia o limita "Iniciar sesión con ChatGPT" (todavía está en fase de prueba) | Mantener siempre la opción de clave de API como respaldo, y la IA local |
+| OpenAI cambia o limita "Iniciar sesión con ChatGPT" (todavía está en vista previa) | Mantener siempre la opción de clave de API y OpenRouter como respaldo, y la IA local |
+| Una clave de API se filtra o se gasta de más | Las claves viven solo en el almacén seguro del sistema (nunca en `config.json`, en los registros ni en los mensajes de error); con OpenRouter el usuario fija su propio límite de gasto, y "Borrar clave" la quita de Eva |
 
 **La versión 1.0 está terminada cuando:**
 
@@ -339,4 +341,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0 y 1 están completas con el modelo local (LM Studio). La Fase 2 se divide en tres bloques: 2A (historial en SQLite, barra lateral y ajustes locales) está hecho, revisado y con las correcciones de la revisión aplicadas (68 pruebas); 2B (memoria a largo plazo con Engram) está implementado y probado con el modelo local, pendiente de revisión (falta el respaldo de la nube para extraer datos, que llega con 2C); sigue 2C (cliente de la nube e inicio de sesión con `keyring`).
+**Siguiente paso concreto:** las Fases 0 y 1 están completas con el modelo local (LM Studio). De la Fase 2 están terminados, revisados y en GitHub los bloques 2A (historial en SQLite, barra lateral y ajustes locales), 2B (memoria a largo plazo con Engram) y 2C (OpenAI, Claude, Gemini y OpenRouter con clave de API o inicio de sesión con OpenRouter, claves en `keyring` y respaldo de la nube para extraer recuerdos); cada bloque está en su rama (`feat/fase-2b-engram` y `feat/fase-2c-nube`, apilada sobre la anterior), con sus PR pendientes. Sigue el bloque 2D ("Iniciar sesión con ChatGPT" con registro dinámico) y luego la Fase 3 (voz a texto).

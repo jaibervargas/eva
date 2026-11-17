@@ -16,13 +16,18 @@ NOMBRE_APP = "Eva"
 @dataclass(frozen=True)
 class Proveedor:
     nombre: str
-    url: str
+    url: str = ""  # local servers only; cloud addresses live in app.llm.cloud_client
+    nube: bool = False  # cloud providers need a key kept in the OS keyring
 
 
-# Local model servers with an OpenAI-compatible API (cloud providers: Phase 2C).
+# Local model servers with an OpenAI-compatible API, then the cloud providers.
 PROVEEDORES = {
     "lmstudio": Proveedor("LM Studio", "http://localhost:1234/v1"),
     "ollama": Proveedor("Ollama", "http://localhost:11434/v1"),
+    "openai": Proveedor("OpenAI", nube=True),
+    "anthropic": Proveedor("Claude", nube=True),
+    "gemini": Proveedor("Gemini", nube=True),
+    "openrouter": Proveedor("OpenRouter", nube=True),
 }
 PROVEEDOR_POR_DEFECTO = "lmstudio"
 
