@@ -109,6 +109,14 @@ def test_responder_raises_error_llm_when_server_is_down():
     )
 
 
+def test_listar_modelos_raises_error_llm_on_http_error():
+    def failing(request):
+        return httpx.Response(500, json={"error": {"message": "boom"}})
+
+    with pytest.raises(ErrorLLM, match="El modelo local devolvió un error"):
+        _client(failing).listar_modelos()
+
+
 def test_listar_modelos_skips_embedding_models():
     server = FakeServer(
         models=["qwen/qwen3-1.7b", "text-embedding-nomic-embed-text-v1.5", "google/gemma"]

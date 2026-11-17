@@ -60,6 +60,8 @@ class ClienteLocal(ClienteLLM):
             modelos = self._cliente.models.list()
         except openai.APIConnectionError as exc:
             raise ErrorLLM(self._mensaje_sin_conexion()) from exc
+        except openai.APIError as exc:
+            raise ErrorLLM(f"El modelo local devolvió un error: {exc}") from exc
         return [m.id for m in modelos if "embed" not in m.id.lower()]
 
     def _mensaje_sin_conexion(self) -> str:
