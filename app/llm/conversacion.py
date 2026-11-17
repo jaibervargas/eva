@@ -9,7 +9,7 @@ import json
 import logging
 import re
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Protocol
 
 from app.llm.base import ClienteLLM, ErrorLLM
@@ -37,19 +37,25 @@ def extraer_hechos(salida: str) -> list[tuple[str, str]]:
     anything that is not a JSON list gives no facts, and items without a
     non-empty text ``titulo`` and ``contenido`` are skipped.
     """
+    return leer_hechos(salida) or []
+
+
+def leer_hechos(salida: str) -> list[tuple[str, str]] | None:
+    """Like ``extraer_hechos``, but ``None`` when the answer cannot be read as
+    a JSON list (so a valid ``[]`` is told apart from a failed extraction)."""
     texto = _PENSAMIENTO.sub("", salida or "")
     if "<think>" in texto.lower():
-        return []  # the model never finished thinking: no final answer
+        return None  # the model never finished thinking: no final answer
     texto = _CERCO.sub("", texto)
     inicio, fin = texto.find("["), texto.rfind("]")
     if inicio < 0 or fin < inicio:
-        return []
+        return None
     try:
         datos = json.loads(texto[inicio : fin + 1])
     except ValueError:
-        return []
+        return None
     if not isinstance(datos, list):
-        return []
+        return None
     hechos = []
     for item in datos:
         if not isinstance(item, dict):
@@ -181,9 +187,18 @@ class MemoriaUsuario:
                 break
         return elegidos
 
-    def aprender(self, cliente: ClienteLLM, texto: str) -> list[Recuerdo]:
+    def aprender(
+        self,
+        cliente: ClienteLLM,
+        texto: str,
+        respaldo: Callable[[], ClienteLLM | None] | None = None,
+    ) -> list[Recuerdo]:
         """Ask the model for durable facts in the user's message ``texto`` and
-        save them. Returns what was saved; never raises."""
+        save them. Returns what was saved; never raises.
+
+        When the model fails or its answer cannot be read, ``respaldo`` (if
+        given) builds a cloud client that gets one more try; it may return
+        ``None`` when no cloud provider is usable."""
         if not self.disponible:
             return []
         with self._candado:
@@ -193,16 +208,18 @@ class MemoriaUsuario:
             {"role": "system", "content": PROMPT_EXTRACCION},
             {"role": "user", "content": texto},
         ]
-        try:
-            salida = "".join(cliente.responder(mensajes))
-        except ErrorLLM as exc:
-            log.warning("Could not extract facts to remember: %s", exc)
-            return []
-        except Exception:
-            log.exception("Unexpected error extracting facts to remember")
-            return []
+        hechos = _extraer(cliente, mensajes)
+        if hechos is None and respaldo is not None:
+            try:
+                nube = respaldo()
+            except Exception:
+                log.exception("Could not prepare the cloud model to extract facts")
+                nube = None
+            if nube is not None:
+                log.info("Local extraction failed; retrying once with the cloud model")
+                hechos = _extraer(nube, mensajes)
         guardados = []
-        for titulo, contenido in extraer_hechos(salida):
+        for titulo, contenido in hechos or []:
             try:
                 id_ = self.memoria.guardar(titulo, contenido)
             except ErrorMemoria as exc:
@@ -327,3 +344,16 @@ class Conversacion:
             _titulo(texto),
             [pregunta, {"role": "assistant", "content": "".join(partes)}],
         )
+
+
+def _extraer(cliente: ClienteLLM, mensajes: list) -> list[tuple[str, str]] | None:
+    """Facts from one extraction request; ``None`` when it failed or was unreadable."""
+    try:
+        salida = "".join(cliente.responder(mensajes))
+    except ErrorLLM as exc:
+        log.warning("Could not extract facts to remember: %s", exc)
+        return None
+    except Exception:
+        log.exception("Unexpected error extracting facts to remember")
+        return None
+    return leer_hechos(salida)

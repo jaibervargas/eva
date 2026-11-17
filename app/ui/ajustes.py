@@ -238,7 +238,13 @@ class DialogoAjustes:
             self.estado.value, self.estado.color = str(exc), ROJO_ERROR
             self.page.update()
             return
-        nueva = Config(proveedor=proveedor, modelo=self.modelo.value or "", extras=self.config.extras)
+        modelo = self.modelo.value or ""
+        extras = dict(self.config.extras)
+        if self._es_nube(proveedor):
+            # The last cloud model saved also extracts memories when the local
+            # model fails (no key here: it stays in the keyring).
+            extras["respaldo"] = {"proveedor": proveedor, "modelo": modelo}
+        nueva = Config(proveedor=proveedor, modelo=modelo, extras=extras)
         try:
             guardar_config(nueva)
         except OSError as exc:

@@ -7,7 +7,7 @@ import flet as ft
 
 from app.config import PROVEEDORES, Config
 from app.llm.base import ClienteLLM, ErrorLLM
-from app.llm.cloud_client import conectar_nube
+from app.llm.cloud_client import ClienteNube, conectar_nube, crear_cliente
 from app.llm.conversacion import Conversacion, MemoriaUsuario
 from app.llm.local_client import conectar
 from app.secretos import ErrorSecretos, leer_clave
@@ -192,7 +192,9 @@ class PantallaChat:
     def _aprender(self, cliente, texto: str) -> None:
         """Save facts from the user's message(s) (background, after the answer)."""
         try:
-            self.memoria.aprender(cliente, texto)
+            # A cloud chat model already did the extraction: no second try.
+            respaldo = None if PROVEEDORES[self.config.proveedor].nube else self._respaldo_nube
+            self.memoria.aprender(cliente, texto, respaldo=respaldo)
         except Exception:  # aprender never raises; this is a last guard
             log.exception("Unexpected error saving long-term memories")
         try:
@@ -200,6 +202,20 @@ class PantallaChat:
             self.page.update()
         except Exception:  # e.g. the window is closing: keep the extractor alive
             log.exception("Could not refresh the screen after learning")
+
+    def _respaldo_nube(self) -> ClienteNube | None:
+        """Cloud client for fact extraction (the last cloud provider saved in
+        settings), or ``None`` when there is none or its key is missing."""
+        respaldo = self.config.extras.get("respaldo")
+        if not isinstance(respaldo, dict):
+            return None
+        proveedor, modelo = respaldo.get("proveedor"), respaldo.get("modelo")
+        if not (isinstance(proveedor, str) and proveedor in PROVEEDORES and PROVEEDORES[proveedor].nube):
+            return None
+        if not (isinstance(modelo, str) and modelo):
+            return None
+        clave = leer_clave(proveedor)
+        return crear_cliente(proveedor, modelo, clave) if clave else None
 
     def _abrir_recuerdos(self) -> None:
         if self.memoria is not None:

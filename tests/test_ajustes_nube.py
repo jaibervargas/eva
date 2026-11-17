@@ -137,7 +137,11 @@ def test_a_typed_key_lists_models_and_is_saved_in_the_keyring_not_in_config(monk
     assert page.dialogos == []
     assert [(c.proveedor, c.modelo) for c in aplicadas] == [("openai", "gpt-b")]
     assert secretos.leer_clave("openai") == CLAVE
-    assert _config_en_disco(datos) == {"proveedor": "openai", "modelo": "gpt-b"}
+    assert _config_en_disco(datos) == {
+        "proveedor": "openai",
+        "modelo": "gpt-b",
+        "respaldo": {"proveedor": "openai", "modelo": "gpt-b"},
+    }
     assert CLAVE not in (datos / "config.json").read_text(encoding="utf-8")
 
 
