@@ -1,5 +1,6 @@
 """Settings dialog: choose the local provider and one of its installed models."""
 
+import logging
 from collections.abc import Callable
 
 import flet as ft
@@ -7,6 +8,8 @@ import flet as ft
 from app.config import PROVEEDORES, Config, guardar_config, resolver_modelo
 from app.llm.base import ErrorLLM
 from app.llm.local_client import ClienteLocal
+
+log = logging.getLogger(__name__)
 
 ROJO_ERROR = "#F87171"
 GRIS_TEXTO = "#9CA3AF"
@@ -63,22 +66,27 @@ class DialogoAjustes:
     def _cargar_modelos(self) -> None:
         """Fill the model list from the selected provider's server, off the UI loop."""
         proveedor = self.proveedor.value
+        self._carga = getattr(self, "_carga", 0) + 1
         self.estado.value, self.estado.color = CONECTANDO, GRIS_TEXTO
         self.boton_guardar.disabled = True
         self.page.update()
-        self.page.run_thread(self._buscar_modelos, proveedor)
+        self.page.run_thread(self._buscar_modelos, proveedor, self._carga)
 
-    def _buscar_modelos(self, proveedor: str) -> None:
+    def _buscar_modelos(self, proveedor: str, carga: int = 0) -> None:
         url = PROVEEDORES[proveedor].url
         try:
             modelos = ClienteLocal(modelo="", base_url=url).listar_modelos()
         except ErrorLLM as exc:
             modelos = []
             error = str(exc)
+        except Exception as exc:  # never leave the dialog stuck on "Conectando…"
+            log.exception("Unexpected error listing models")
+            modelos = []
+            error = f"Ocurrió un error inesperado: {exc}"
         else:
             error = None
-        if self.proveedor.value != proveedor:
-            return  # the user picked another provider meanwhile; its load wins
+        if carga != getattr(self, "_carga", carga) or self.proveedor.value != proveedor:
+            return  # a newer load (or another provider) started meanwhile; it wins
         if error is not None:
             self.estado.value, self.estado.color = error, ROJO_ERROR
         else:

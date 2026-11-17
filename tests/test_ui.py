@@ -351,3 +351,39 @@ def test_clearing_the_connection_error_keeps_an_identical_saved_message(monkeypa
     server.apagado = False
     _enviar(pantalla, "hola")
     assert _valores(pantalla) == ["x", SIN_CONEXION, "hola", "Hola"]
+
+
+def test_dialog_unexpected_error_does_not_stay_connecting(monkeypatch):
+    def roto(modelo, base_url):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(ajustes, "ClienteLocal", roto)
+    d = DialogoAjustes(FakePage(), Config(), lambda c: None)
+    d.abrir()
+
+    assert d.estado.value == "Ocurrió un error inesperado: x"
+    assert d.estado.color == ROJO_ERROR
+    assert d.boton_guardar.disabled is True
+
+
+def test_dialog_keeps_only_the_latest_model_load(monkeypatch):
+    # Answers in execution order: the newer load runs first, the older one last.
+    respuestas = iter([["nuevo"], ["viejo"]])
+
+    class Cliente:
+        def __init__(self, modelo, base_url):
+            self.modelos = next(respuestas)
+
+        def listar_modelos(self):
+            return self.modelos
+
+    monkeypatch.setattr(ajustes, "ClienteLocal", Cliente)
+    page = FakePage(ejecutar=False)
+    d = DialogoAjustes(page, Config(), lambda c: None)
+    d._cargar_modelos()
+    d._cargar_modelos()
+    primera, segunda = page.pendientes
+    page.pendientes = [segunda, primera]  # the older load finishes last
+    page.correr_pendientes()
+
+    assert [opcion.text for opcion in d.modelo.options] == ["nuevo"]
