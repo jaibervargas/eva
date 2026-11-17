@@ -129,6 +129,8 @@ class PantallaChat:
     def _conectar_y_enviar(self, texto: str | None) -> None:
         self._conectar()  # never raises: failures become the connection-error bubble
         if texto is not None and self.cliente is not None:
+            # The field stays editable while connecting: send what it holds now.
+            texto = (self.campo.value or "").strip() or texto
             respuesta = self._empezar_turno(texto)
             self._responder(texto, respuesta)  # releases the screen when done
             return

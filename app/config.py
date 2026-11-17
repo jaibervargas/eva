@@ -98,8 +98,14 @@ def carpeta_datos() -> Path:
     else:
         base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
         carpeta = Path(base) / NOMBRE_APP.lower()
+    nueva = not carpeta.exists()
     carpeta.mkdir(parents=True, exist_ok=True)
-    if sys.platform != "win32":
-        # Conversations are private: only the user may read the folder.
-        os.chmod(carpeta, 0o700)
+    if nueva and sys.platform != "win32":
+        # Conversations are private: only the user may read a folder Eva creates.
+        # An existing folder keeps its permissions, and a filesystem that rejects
+        # chmod (vfat, some network mounts) must not block startup.
+        try:
+            os.chmod(carpeta, 0o700)
+        except OSError:
+            pass
     return carpeta

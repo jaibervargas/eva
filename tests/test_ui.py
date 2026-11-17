@@ -316,6 +316,23 @@ def test_connecting_runs_off_the_ui_loop_and_blocks_sending(monkeypatch, tmp_pat
     assert pantalla.ocupado is False
 
 
+def test_text_corrected_while_connecting_is_what_gets_sent(monkeypatch, tmp_path):
+    server = Servidor(models=["m"], chunks=[_chunk(content="Hola")], apagado=True)
+    _usar_servidor(monkeypatch, server)
+    page = FakePage(ejecutar=False)
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.iniciar()
+    page.correr_pendientes()
+    server.apagado = False
+
+    _enviar(pantalla, "hola")
+    pantalla.campo.value = "hola, soy Ana"  # edited during Conectando…
+    page.correr_pendientes()
+
+    assert _valores(pantalla)[-2:] == ["hola, soy Ana", "Hola"]
+    assert pantalla.campo.value == ""
+
+
 def test_reconnecting_before_sending_runs_off_the_ui_loop(monkeypatch, tmp_path):
     server = Servidor(models=["m"], chunks=[_chunk(content="Hola")], apagado=True)
     _usar_servidor(monkeypatch, server)
@@ -329,10 +346,11 @@ def test_reconnecting_before_sending_runs_off_the_ui_loop(monkeypatch, tmp_path)
     assert pantalla.etiqueta_modelo.value == "Conectando…"
     assert pantalla.ocupado is True
     _enviar(pantalla, "otra")
-    assert len(page.pendientes) == 1
+    assert len(page.pendientes) == 1  # the second Enter is not queued...
     page.correr_pendientes()
 
-    assert _valores(pantalla) == ["hola", "Hola"]
+    # ...but the field's current text is what gets sent once connected.
+    assert _valores(pantalla) == ["otra", "Hola"]
     assert pantalla.ocupado is False
 
 

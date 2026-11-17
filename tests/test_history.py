@@ -111,6 +111,28 @@ def test_data_folder_is_made_private_outside_windows(tmp_path, monkeypatch):
     assert llamadas == [(carpeta, 0o700)]
 
 
+def test_existing_user_chosen_folder_keeps_its_permissions(tmp_path, monkeypatch):
+    llamadas = []
+    (tmp_path / "compartida").mkdir()
+    monkeypatch.setenv("EVA_DATA_DIR", str(tmp_path / "compartida"))
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr("app.config.os.chmod", lambda ruta, modo: llamadas.append((ruta, modo)))
+
+    assert carpeta_datos() == tmp_path / "compartida"
+    assert llamadas == []
+
+
+def test_chmod_failure_does_not_block_startup(tmp_path, monkeypatch):
+    def rechazar(ruta, modo):
+        raise PermissionError("vfat")
+
+    monkeypatch.setenv("EVA_DATA_DIR", str(tmp_path / "usb"))
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr("app.config.os.chmod", rechazar)
+
+    assert carpeta_datos() == tmp_path / "usb"
+
+
 def test_data_folder_permissions_are_unchanged_on_windows(tmp_path, monkeypatch):
     llamadas = []
     monkeypatch.setenv("EVA_DATA_DIR", str(tmp_path / "datos"))
