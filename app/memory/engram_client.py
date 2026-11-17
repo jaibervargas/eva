@@ -18,8 +18,8 @@ is logged. ``cerrar()`` never raises.
 import asyncio
 import json
 import logging
+import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -84,8 +84,14 @@ def buscar_binario(carpeta_app: Path | None = None) -> Path | None:
     local = (carpeta_app or CARPETA_APP) / "bin" / NOMBRE_BINARIO
     if local.is_file():
         return local
-    en_path = shutil.which("engram")
-    return Path(en_path) if en_path else None
+    # Only absolute PATH entries: shutil.which on Windows also searches the
+    # current folder, so a stray engram.exe where the app was launched would run.
+    for entrada in os.environ.get("PATH", "").split(os.pathsep):
+        if entrada and os.path.isabs(entrada):
+            candidato = Path(entrada) / NOMBRE_BINARIO
+            if candidato.is_file():
+                return candidato
+    return None
 
 
 def carpeta_memoria() -> Path:

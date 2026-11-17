@@ -93,6 +93,10 @@ class MemoriaUsuario:
         self.memoria = memoria
         self._cache: list[Recuerdo] = []  # newest first
         self._candado = threading.Lock()
+        # Changes made while a listing is in flight, so a stale listing
+        # cannot drop a new fact or bring back a deleted one.
+        self._version = 0
+        self._cambios: list[tuple[int, Recuerdo | None, int]] = []  # (version, saved, deleted id)
 
     @property
     def disponible(self) -> bool:
@@ -104,7 +108,8 @@ class MemoriaUsuario:
             if not self.memoria.esperar():
                 log.warning("Long-term memory unavailable: %s", self.memoria.error)
                 return False
-            self._fijar(self.memoria.listar())
+            inicio = self._version_actual()
+            self._fijar(self.memoria.listar(), inicio)
         except ErrorMemoria as exc:
             log.warning("Could not load the memories: %s", exc)
         except Exception:
@@ -167,6 +172,8 @@ class MemoriaUsuario:
                 guardados.append(Recuerdo(id_, titulo, contenido))
         if guardados:
             with self._candado:
+                self._version += 1
+                self._cambios += [(self._version, r, -1) for r in guardados]
                 ids = {r.id for r in guardados}
                 # Same title => same id in Engram: replace the old version.
                 self._cache = [*reversed(guardados), *(r for r in self._cache if r.id not in ids)]
@@ -174,22 +181,39 @@ class MemoriaUsuario:
 
     def listar(self) -> list[Recuerdo]:
         """Every memory, fresh from Engram (refreshes the cache). Raises ErrorMemoria."""
+        inicio = self._version_actual()
         recuerdos = self.memoria.listar()
-        self._fijar(recuerdos)
-        return recuerdos
+        return self._fijar(recuerdos, inicio)
 
     def borrar(self, id_: int) -> None:
         """Delete a memory permanently. Raises ErrorMemoria."""
         self.memoria.borrar(id_)
         with self._candado:
+            self._version += 1
+            self._cambios.append((self._version, None, id_))
             self._cache = [r for r in self._cache if r.id != id_]
 
     def cerrar(self) -> None:
         self.memoria.cerrar()
 
-    def _fijar(self, recuerdos: list[Recuerdo]) -> None:
+    def _version_actual(self) -> int:
         with self._candado:
-            self._cache = list(recuerdos)
+            return self._version
+
+    def _fijar(self, recuerdos: list[Recuerdo], inicio: int) -> list[Recuerdo]:
+        """Store a listing taken at version ``inicio``, replaying later changes."""
+        with self._candado:
+            cache = list(recuerdos)
+            for version, guardado, borrado in self._cambios:
+                if version <= inicio:
+                    continue
+                if guardado is not None:
+                    cache = [guardado, *(r for r in cache if r.id != guardado.id)]
+                else:
+                    cache = [r for r in cache if r.id != borrado]
+            self._cache = cache
+            self._cambios = [c for c in self._cambios if c[0] > inicio]
+            return list(cache)
 
 
 def _titulo(texto: str) -> str:

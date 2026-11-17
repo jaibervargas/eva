@@ -132,12 +132,17 @@ def test_binary_in_app_bin_folder_wins_over_path(tmp_path, monkeypatch):
 
 
 def test_binary_falls_back_to_path(tmp_path, monkeypatch):
-    monkeypatch.setattr(ec.shutil, "which", lambda nombre: "C:/otro/engram.exe" if nombre == "engram" else None)
-    assert ec.buscar_binario(tmp_path) == Path("C:/otro/engram.exe")
+    otro = tmp_path / "otro"
+    otro.mkdir()
+    (otro / ec.NOMBRE_BINARIO).write_bytes(b"engram")
+    monkeypatch.setenv("PATH", str(otro))
+    assert ec.buscar_binario(tmp_path) == otro / ec.NOMBRE_BINARIO
 
 
 def test_no_binary_found(tmp_path, monkeypatch):
-    monkeypatch.setattr(ec.shutil, "which", lambda nombre: None)
+    vacia = tmp_path / "vacia"
+    vacia.mkdir()
+    monkeypatch.setenv("PATH", str(vacia))
     assert ec.buscar_binario(tmp_path) is None
 
 
