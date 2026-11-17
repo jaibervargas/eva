@@ -102,7 +102,7 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 | 7 — Docker, opcional | 12 | `docker compose up` para servidores |
 | 8 — Pruebas, documentación y lanzamiento | 13–14 | Pruebas con pytest, README, pruebas con usuarios, versión 1.0 publicada |
 
-**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A: historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`.
+**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A: historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`, con manejo de errores de conexión revisado y 68 pruebas automatizadas.
 
 **Siguiente paso concreto:** bloque 2B (memoria a largo plazo con Engram) y luego 2C (cliente de la nube e inicio de sesión).
 
