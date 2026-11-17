@@ -2,7 +2,9 @@
 
 import contextlib
 import json
+import logging
 import os
+import stat
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -98,14 +100,22 @@ def carpeta_datos() -> Path:
     else:
         base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
         carpeta = Path(base) / NOMBRE_APP.lower()
-    nueva = not carpeta.exists()
+    elegida_y_existente = bool(os.environ.get("EVA_DATA_DIR")) and carpeta.exists()
     carpeta.mkdir(parents=True, exist_ok=True)
-    if nueva and sys.platform != "win32":
-        # Conversations are private: only the user may read a folder Eva creates.
-        # An existing folder keeps its permissions, and a filesystem that rejects
-        # chmod (vfat, some network mounts) must not block startup.
-        try:
-            os.chmod(carpeta, 0o700)
-        except OSError:
-            pass
+    if sys.platform != "win32" and not elegida_y_existente:
+        _hacer_privada(carpeta)
     return carpeta
+
+
+def _hacer_privada(carpeta: Path) -> None:
+    """Only the user may read Eva's conversations (checked on every startup).
+
+    A folder the user chose that already existed keeps its permissions. A
+    filesystem that rejects chmod (vfat, some network mounts) must not block
+    startup, so the failure is logged instead.
+    """
+    try:
+        if stat.S_IMODE(carpeta.stat().st_mode) & 0o077:
+            os.chmod(carpeta, 0o700)
+    except OSError as exc:
+        logging.getLogger(__name__).warning("Could not make %s private: %s", carpeta, exc)

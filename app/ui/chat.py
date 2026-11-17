@@ -122,15 +122,17 @@ class PantallaChat:
     def _conectar_en_segundo_plano(self, texto: str | None = None) -> None:
         """Connect off the UI loop (it may wait for the server); then send ``texto`` if given."""
         self._ocupar(True)
+        if texto is not None:
+            # Lock the field so nothing typed while connecting can be lost.
+            self.campo.disabled = True
         self.etiqueta_modelo.value = CONECTANDO
         self.page.update()
         self.page.run_thread(self._conectar_y_enviar, texto)
 
     def _conectar_y_enviar(self, texto: str | None) -> None:
         self._conectar()  # never raises: failures become the connection-error bubble
+        self.campo.disabled = False
         if texto is not None and self.cliente is not None:
-            # The field stays editable while connecting: send what it holds now.
-            texto = (self.campo.value or "").strip() or texto
             respuesta = self._empezar_turno(texto)
             self._responder(texto, respuesta)  # releases the screen when done
             return

@@ -1,5 +1,6 @@
 """Tests for the SQLite chat history."""
 
+import logging
 import sqlite3
 import stat
 import sys
@@ -122,15 +123,34 @@ def test_existing_user_chosen_folder_keeps_its_permissions(tmp_path, monkeypatch
     assert llamadas == []
 
 
-def test_chmod_failure_does_not_block_startup(tmp_path, monkeypatch):
+def _carpeta_por_defecto(tmp_path, monkeypatch):
+    monkeypatch.delenv("EVA_DATA_DIR", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setattr("sys.platform", "linux")
+    return tmp_path / "eva"
+
+
+def test_default_folder_is_made_private_on_every_startup(tmp_path, monkeypatch):
+    llamadas = []
+    esperada = _carpeta_por_defecto(tmp_path, monkeypatch)
+    esperada.mkdir()  # left by an earlier version
+    monkeypatch.setattr("app.config.os.chmod", lambda ruta, modo: llamadas.append((ruta, modo)))
+
+    carpeta_datos()
+    carpeta_datos()
+    assert llamadas == [(esperada, 0o700), (esperada, 0o700)]
+
+
+def test_chmod_failure_does_not_block_startup_and_is_logged(tmp_path, monkeypatch, caplog):
     def rechazar(ruta, modo):
         raise PermissionError("vfat")
 
-    monkeypatch.setenv("EVA_DATA_DIR", str(tmp_path / "usb"))
-    monkeypatch.setattr("sys.platform", "linux")
+    esperada = _carpeta_por_defecto(tmp_path, monkeypatch)
     monkeypatch.setattr("app.config.os.chmod", rechazar)
 
-    assert carpeta_datos() == tmp_path / "usb"
+    with caplog.at_level(logging.WARNING, logger="app.config"):
+        assert carpeta_datos() == esperada
+    assert "vfat" in caplog.text
 
 
 def test_data_folder_permissions_are_unchanged_on_windows(tmp_path, monkeypatch):
@@ -145,7 +165,7 @@ def test_data_folder_permissions_are_unchanged_on_windows(tmp_path, monkeypatch)
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
 def test_data_folder_mode_is_0o700(tmp_path, monkeypatch):
-    destino = tmp_path / "datos"
-    destino.mkdir(mode=0o755)
-    monkeypatch.setenv("EVA_DATA_DIR", str(destino))
+    monkeypatch.delenv("EVA_DATA_DIR", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    (tmp_path / "eva").mkdir(mode=0o755)
     assert stat.S_IMODE(carpeta_datos().stat().st_mode) == 0o700

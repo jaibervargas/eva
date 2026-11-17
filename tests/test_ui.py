@@ -316,7 +316,7 @@ def test_connecting_runs_off_the_ui_loop_and_blocks_sending(monkeypatch, tmp_pat
     assert pantalla.ocupado is False
 
 
-def test_text_corrected_while_connecting_is_what_gets_sent(monkeypatch, tmp_path):
+def test_field_is_locked_while_connecting_before_sending(monkeypatch, tmp_path):
     server = Servidor(models=["m"], chunks=[_chunk(content="Hola")], apagado=True)
     _usar_servidor(monkeypatch, server)
     page = FakePage(ejecutar=False)
@@ -326,11 +326,27 @@ def test_text_corrected_while_connecting_is_what_gets_sent(monkeypatch, tmp_path
     server.apagado = False
 
     _enviar(pantalla, "hola")
-    pantalla.campo.value = "hola, soy Ana"  # edited during Conectando…
+    assert pantalla.campo.disabled is True  # nothing can be typed and lost
     page.correr_pendientes()
 
-    assert _valores(pantalla)[-2:] == ["hola, soy Ana", "Hola"]
+    assert _valores(pantalla)[-2:] == ["hola", "Hola"]
     assert pantalla.campo.value == ""
+    assert pantalla.campo.disabled is False
+
+
+def test_field_is_unlocked_when_reconnecting_fails(monkeypatch, tmp_path):
+    server = Servidor(models=["m"], apagado=True)
+    _usar_servidor(monkeypatch, server)
+    page = FakePage(ejecutar=False)
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.iniciar()
+    page.correr_pendientes()
+
+    _enviar(pantalla, "hola")
+    page.correr_pendientes()
+
+    assert pantalla.campo.disabled is False
+    assert pantalla.campo.value == "hola"  # kept to retry
 
 
 def test_reconnecting_before_sending_runs_off_the_ui_loop(monkeypatch, tmp_path):
@@ -346,11 +362,10 @@ def test_reconnecting_before_sending_runs_off_the_ui_loop(monkeypatch, tmp_path)
     assert pantalla.etiqueta_modelo.value == "Conectando…"
     assert pantalla.ocupado is True
     _enviar(pantalla, "otra")
-    assert len(page.pendientes) == 1  # the second Enter is not queued...
+    assert len(page.pendientes) == 1  # the second Enter is not queued
     page.correr_pendientes()
 
-    # ...but the field's current text is what gets sent once connected.
-    assert _valores(pantalla) == ["otra", "Hola"]
+    assert _valores(pantalla) == ["hola", "Hola"]
     assert pantalla.ocupado is False
 
 
