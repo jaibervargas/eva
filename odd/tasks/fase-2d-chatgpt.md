@@ -46,7 +46,7 @@ Plan quote (docs/plan-de-trabajo.md, Fase 2) is verbatim; the protocol facts com
 - T2 [S1] `app/auth_chatgpt.py` OAuth sign-in, refresh, revoke, ID-token validation, tests, requirements — route: gentle-ai-worker (parallel) — done (L7)
 - T3 [S3] `app/llm/chatgpt_client.py` Responses API client and model list, tests — route: gentle-ai-worker (parallel) — done (L8)
 - T4 [S4] settings with account picker, chat wiring, token refresh, extraction fallback, tests — route: gentle-ai-worker (context backstop) — done (L9)
-- T5 [S5] docs, verify, native review, live test — pending
+- T5 [S5] docs, verify, native review, live test — docs f5b2155, verify and reviews done; live test pending (L14)
 
 - T6 [S6] fix review advisories (auth_chatgpt, cuentas_chatgpt, chatgpt_client, sesion_chatgpt, panel_chatgpt) with tests — route: gentle-ai-worker (context backstop) — done (L12)
 
@@ -65,3 +65,4 @@ Plan quote (docs/plan-de-trabajo.md, Fase 2) is verbatim; the protocol facts com
 - L11 (user): "1" — fix points 1-8 of the L10 advisories; the rest stays as is.
 - L12 (T6, worker evidence): RED 49 failing tests across (1)-(8); GREEN 670 passed, 3 skipped (parent re-ran). New `sesion_chatgpt.cerrar_sesion_cuenta` (sign-out under the account lock, revokes the newest refresh token, always forgets). Deviations: discovery/JWKS 4xx, missing jwks_uri or non-JSON also → unavailable; stale-link page answered with HTTP 400; in-memory unsaved tokens dropped when the saved refresh token changes; sign-out holds the account lock during revocation retries.
 - L13 (native review of T6): lineage review-74c3b45739d14281 (base da28ea6, commit b24e4c9) approved and acknowledged; R3-001 (CRITICAL, double save failure loses rotated tokens) refuted by the provider refuter. Non-blocking: R1-001 sign-out drops in-memory tokens before a store read that may fail (newest refresh token not revoked); R3-002 sign-out holds the account lock during revocation; R4-001 completar's cleanup revocation is unguarded (an unexpected exception could replace the ErrorAuth) and delays the error by the retry budget; R4-002 a WARNING per chat turn while the store keeps failing. Kept as is unless the user asks.
+- L14 (independent verify, Risk items 2 and 5): S1-S4 and S6 met, S5 partially (live Plus/Pro test pending); no blockers; 670 passed, 3 skipped; pip check clean. Advisories: A1 panel discards tokens without revoking when the user cancels right after sign-in returns or guardar fails; A2 `_SinGuardar` repr includes a refresh token (never logged today); A3 cffi not pinned; A4 confirms L13 R1-001. Unverified: live sign-in/chat, callback `client_id` parameter name, real Flet rendering.
