@@ -102,9 +102,9 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 | 7 — Docker, opcional | 12 | `docker compose up` para servidores |
 | 8 — Pruebas, documentación y lanzamiento | 13–14 | Pruebas con pytest, README, pruebas con usuarios, versión 1.0 publicada |
 
-**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A: historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`, con manejo de errores de conexión revisado y 68 pruebas automatizadas.
+**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Falta, para el bloque 2C, usar el modelo de la nube como respaldo al extraer recuerdos.
 
-**Siguiente paso concreto:** bloque 2B (memoria a largo plazo con Engram) y luego 2C (cliente de la nube e inicio de sesión).
+**Siguiente paso concreto:** bloque 2C (cliente de la nube e inicio de sesión).
 
 ## Instalación y ejecución
 
@@ -115,7 +115,14 @@ cd C:\xampp\htdocs\eva
 py -3.11 -m venv venv
 venv\Scripts\Activate.ps1
 pip install -r requirements.txt -r requirements-dev.txt
+python scripts/descargar_engram.py   # baja Engram (memoria a largo plazo) a bin/
 ```
+
+`scripts/descargar_engram.py` baja la versión fijada de Engram (v3.7.2) para tu
+sistema desde GitHub, comprueba su huella SHA-256 y deja solo el programa en
+`bin/` (que no se sube a git). Sin este paso la app funciona igual, pero sin
+memoria a largo plazo. Para bajar el de otro sistema:
+`python scripts/descargar_engram.py --plataforma linux-arm64`.
 
 ### 2. Prender el modelo local (LM Studio)
 
@@ -174,6 +181,38 @@ guardar, el cambio se aplica enseguida. La primera vez se usa LM Studio con el
 primer modelo de chat que liste (los modelos Qwen3 "piensan" unos segundos antes
 de contestar).
 
+### 5. Memoria a largo plazo (Engram)
+
+Además del historial de cada conversación, Eva recuerda datos tuyos entre
+conversaciones distintas. Por ejemplo, si le dices "Me llamo Ana y me gusta el
+café" y luego, en una **conversación nueva**, le preguntas "¿Cómo me llamo?",
+Eva sabe que te llamas Ana.
+
+Cómo funciona:
+
+- Al abrir la app, Eva arranca [Engram](https://github.com/Gentleman-Programming/engram)
+  en segundo plano (el programa de `bin/`, o `engram` si está instalado en el
+  sistema) y se conecta a él por MCP.
+- **Antes de cada respuesta** busca recuerdos relacionados con tu pregunta y le
+  pasa al modelo hasta 8 recuerdos (primero los encontrados y luego los demás
+  datos que conoce de ti). Los recuerdos son solo contexto: no se guardan en el
+  historial del chat.
+- **Después de cada respuesta**, en segundo plano y sin demorar el chat, le pide
+  al mismo modelo local que extraiga datos duraderos de tu mensaje (nombre,
+  gustos, decisiones) y los guarda. Si un dato cambia (por ejemplo, tu nombre
+  completo), se actualiza en lugar de duplicarse. Por ahora solo se usa el
+  modelo local; el respaldo con un modelo de la nube llega con el bloque 2C.
+- El botón **Recuerdos** de la barra lateral muestra lo que Eva recuerda de ti
+  (título y contenido). Cada recuerdo tiene un botón para borrarlo: pide
+  confirmación y lo borra para siempre.
+- Si Engram no está, no arranca o falla, el chat sigue funcionando sin memoria
+  a largo plazo y bajo el modelo aparece la nota discreta "Memoria a largo
+  plazo no disponible" (el detalle queda en el registro de errores). Al cerrar
+  la app, Eva cierra también Engram.
+
+Los recuerdos se guardan en la subcarpeta `engram/` de la carpeta de datos de
+Eva (ver abajo), nunca en `~/.engram`, que es la de otros usos de Engram.
+
 ### Dónde se guardan los datos
 
 | Sistema | Carpeta |
@@ -182,14 +221,17 @@ de contestar).
 | Mac | `~/Library/Application Support/Eva` |
 | Linux | `~/.local/share/eva` |
 
-Ahí están `eva.db` (el historial del chat, en SQLite) y `config.json` (los
-ajustes). En Mac y Linux la carpeta queda con permisos `700`: solo tu usuario
+Ahí están `eva.db` (el historial del chat, en SQLite), `config.json` (los
+ajustes) y la carpeta `engram/` (los recuerdos a largo plazo, con el registro
+`engram-mcp.log` de Engram). En Mac y Linux la carpeta queda con permisos `700`: solo tu usuario
 puede leer tus conversaciones. Para usar otra carpeta, define la variable `EVA_DATA_DIR` antes de
 correr la app; por ejemplo, en PowerShell: `$env:EVA_DATA_DIR = "C:\pruebas\eva"`.
 
-### 5. Correr las pruebas
+### 6. Correr las pruebas
 
-No necesitan LM Studio: usan un servidor simulado.
+No necesitan LM Studio ni Engram: usan un servidor y una memoria simulados. Si
+el programa de Engram está en `bin/` (o en el PATH), unas pruebas extra lo usan
+de verdad, siempre en una carpeta temporal.
 
 ```powershell
 python -m pytest -q

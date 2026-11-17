@@ -1,25 +1,61 @@
 """Eva entry point. Run with: python -m app.main
 
 Chat history and settings (config.json) live in the user data folder;
-see app.config.carpeta_datos.
+see app.config.carpeta_datos. Long-term memory (Engram) lives in its
+``engram`` subfolder and its process is closed when the app closes.
 """
+
+import logging
+from collections.abc import Callable
 
 import flet as ft
 
 from app.config import cargar_config, carpeta_datos
+from app.llm.conversacion import MemoriaUsuario
+from app.memory.engram_client import MemoriaEngram
 from app.memory.history import Historial
 from app.ui.chat import FONDO, PantallaChat
 
+log = logging.getLogger(__name__)
 
-def main(page: ft.Page) -> None:
-    page.title = "Eva — IDEVA"
-    page.theme_mode = ft.ThemeMode.DARK
-    page.bgcolor = FONDO
-    page.padding = 0
-    pantalla = PantallaChat(page, Historial(carpeta_datos() / "eva.db"), cargar_config())
-    page.add(pantalla.vista())
-    pantalla.iniciar()
+
+def crear_memoria() -> MemoriaEngram | None:
+    """Start Engram in the background; None (chat without memory) if that fails."""
+    try:
+        return MemoriaEngram()
+    except Exception:
+        log.exception("Could not create the long-term memory")
+        return None
+
+
+def crear_main(memoria: MemoriaEngram | None) -> Callable[[ft.Page], None]:
+    def main(page: ft.Page) -> None:
+        page.title = "Eva — IDEVA"
+        page.theme_mode = ft.ThemeMode.DARK
+        page.bgcolor = FONDO
+        page.padding = 0
+        pantalla = PantallaChat(
+            page,
+            Historial(carpeta_datos() / "eva.db"),
+            cargar_config(),
+            MemoriaUsuario(memoria) if memoria is not None else None,
+        )
+        page.add(pantalla.vista())
+        pantalla.iniciar()
+
+    return main
+
+
+def ejecutar() -> None:
+    memoria = crear_memoria()
+    try:
+        # On desktop ft.run returns when the window closes.
+        ft.run(crear_main(memoria))
+    finally:
+        if memoria is not None:
+            memoria.cerrar()  # stops the engram process
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    ejecutar()
