@@ -102,7 +102,9 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 | 7 — Docker, opcional | 12 | `docker compose up` para servidores |
 | 8 — Pruebas, documentación y lanzamiento | 13–14 | Pruebas con pytest, README, pruebas con usuarios, versión 1.0 publicada |
 
-**Siguiente paso concreto:** completar la Fase 0 esta semana. Después, el siguiente bloque de código a escribir es `llm/base.py` y la primera pantalla de chat en Flet de la Fase 1.
+**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio); el cliente de la nube pasó a la Fase 2.
+
+**Siguiente paso concreto:** Fase 2: guardar el historial en SQLite, la pantalla de ajustes con `config.json`, el cliente de la nube y la memoria a largo plazo con Engram.
 
 ## Instalación y ejecución
 

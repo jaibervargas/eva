@@ -200,26 +200,27 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 0 — Preparación del entorno (semana 1)
 
-- [ ] Instalar Python, Git, VS Code, Ollama y LM Studio; en LM Studio, descargar un modelo y activar su servidor local.
-- [ ] Crear el repositorio en GitHub y la estructura de carpetas de la sección 5.
-- [ ] Crear el entorno virtual (`python -m venv venv`) e instalar Flet (`pip install flet`).
-- [ ] Descargar un modelo en Ollama (`ollama pull llama3.2`) y probarlo en la terminal.
-- [ ] Abrir una ventana de prueba con Flet ("Hola mundo").
+- [x] Instalar Python, Git, VS Code, Ollama y LM Studio; en LM Studio, descargar un modelo y activar su servidor local. *(Python 3.11, Git y LM Studio con su servidor en el puerto 1234; Ollama queda pendiente porque por ahora se trabaja con LM Studio.)*
+- [x] Crear el repositorio en GitHub y la estructura de carpetas de la sección 5.
+- [x] Crear el entorno virtual (`python -m venv venv`) e instalar Flet (`pip install flet`).
+- [ ] Descargar un modelo en Ollama (`ollama pull llama3.2`) y probarlo en la terminal. *(Pospuesto: se usa LM Studio; el mismo cliente sirve para Ollama cuando se instale.)*
+- [x] Abrir una ventana de prueba con Flet ("Hola mundo").
 
-**Entregable:** repositorio creado, Ollama respondiendo y una ventana de Flet abierta.
+**Entregable:** repositorio creado, Ollama respondiendo y una ventana de Flet abierta. **Estado: completada con LM Studio en lugar de Ollama.**
 
 ### Fase 1 — Chat de texto con la IA (semana 2)
 
-- [ ] Escribir `llm/base.py` con una función común `responder(mensajes)`.
-- [ ] Implementar `local_client.py` y `cloud_client.py`.
-- [ ] Escribir el prompt del sistema (se presenta como Eva, de IDEVA; personalidad, idioma español, tono).
-- [ ] Crear la pantalla de chat en Flet: lista de burbujas y campo de texto.
-- [ ] Mostrar la respuesta en streaming (palabra por palabra).
+- [x] Escribir `llm/base.py` con una función común `responder(mensajes)`.
+- [x] Implementar `local_client.py` y `cloud_client.py`. *(`local_client.py` listo para LM Studio y Ollama; `cloud_client.py` se movió a la Fase 2, junto con las claves de API y el inicio de sesión.)*
+- [x] Escribir el prompt del sistema (se presenta como Eva, de IDEVA; personalidad, idioma español, tono).
+- [x] Crear la pantalla de chat en Flet: lista de burbujas y campo de texto.
+- [x] Mostrar la respuesta en streaming (palabra por palabra).
 
-**Entregable:** chat por texto funcionando con el modelo local y con el de la nube.
+**Entregable:** chat por texto funcionando con el modelo local y con el de la nube. **Estado: chat local funcionando y verificado (11 pruebas con pytest); falta la revisión visual. La parte de la nube pasa a la Fase 2.**
 
 ### Fase 2 — Memoria, Engram y ajustes (semanas 3 y 4)
 
+- [ ] Implementar `llm/cloud_client.py` (OpenAI, Claude y Gemini con clave de API), movido desde la Fase 1.
 - [ ] Crear la base SQLite con las tablas `conversaciones` y `mensajes`, guardada en la carpeta del usuario.
 - [ ] Guardar cada mensaje y enviar los últimos 20 al modelo como contexto.
 - [ ] Agregar en la barra lateral: nueva conversación y lista de conversaciones anteriores.
@@ -338,4 +339,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** completar la Fase 0 esta semana. Después, el siguiente bloque de código a escribir es `llm/base.py` y la primera pantalla de chat en Flet de la Fase 1.
+**Siguiente paso concreto:** las Fases 0 y 1 están completas con el modelo local (LM Studio). Sigue la Fase 2: guardar el historial en SQLite, la pantalla de ajustes con `config.json`, el cliente de la nube y la memoria a largo plazo con Engram.
