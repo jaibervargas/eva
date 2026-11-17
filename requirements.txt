@@ -1,4 +1,7 @@
 flet==1.1.2
 openai==3.52.0
+anthropic==2.9.0
 httpx==0.28.1
+httpx2==2.16.2
+keyring==25.7.0
 mcp==1.30.0
