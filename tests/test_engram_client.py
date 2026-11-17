@@ -127,7 +127,10 @@ def test_binary_in_app_bin_folder_wins_over_path(tmp_path, monkeypatch):
     (tmp_path / "bin").mkdir()
     binario = tmp_path / "bin" / ec.NOMBRE_BINARIO
     binario.write_bytes(b"x")
-    monkeypatch.setattr(ec.shutil, "which", lambda nombre: "C:/otro/engram.exe")
+    otro = tmp_path / "otro"
+    otro.mkdir()
+    (otro / ec.NOMBRE_BINARIO).write_bytes(b"engram")
+    monkeypatch.setenv("PATH", str(otro))
     assert ec.buscar_binario(tmp_path) == binario
 
 
