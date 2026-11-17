@@ -89,3 +89,11 @@ def test_error_message_never_contains_the_key(monkeypatch):
     mensaje = str(exc.value)
     assert CLAVE not in mensaje
     assert mensaje.startswith("No pude usar el almacén seguro del sistema: ")
+
+
+def test_a_set_error_quoting_the_key_shows_it_masked(monkeypatch):
+    monkeypatch.setattr(keyring.core, "_keyring_backend", KeyringRoto(detalle=f"no acepto '{CLAVE}' aquí"))
+    with pytest.raises(ErrorSecretos) as exc:
+        guardar_clave("openai", CLAVE)
+    assert str(exc.value) == "No pude usar el almacén seguro del sistema: no acepto '***' aquí"
+    assert exc.value.__cause__ is None and exc.value.__suppress_context__

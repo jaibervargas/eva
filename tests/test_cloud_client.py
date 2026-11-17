@@ -395,6 +395,63 @@ def test_error_detail_never_contains_the_key(proveedor):
     assert CLAVE not in str(exc.value)
 
 
+def test_claude_400_echoing_the_key_is_masked():
+    servidor = Servidor("anthropic", estado=400, error=f"clave rara {CLAVE}")
+    with pytest.raises(ErrorLLM) as exc:
+        list(_cliente(servidor).responder(HOLA))
+    assert str(exc.value) == "Claude devolvió un error: clave rara ***"
+
+
+def _lento(proveedor, error):
+    h = _modulo(proveedor)
+
+    def servidor(request):
+        raise getattr(h, error)("timed out", request=request)
+
+    servidor.proveedor = proveedor
+    servidor.h = h
+    return servidor
+
+
+@pytest.mark.parametrize("error", ["ReadTimeout", "WriteTimeout", "PoolTimeout"])
+@pytest.mark.parametrize("proveedor", TODOS)
+def test_a_timeout_before_the_answer_says_it_took_too_long(proveedor, error):
+    esperado = f"{NOMBRES[proveedor]} tardó demasiado en responder. Inténtalo de nuevo."
+    with pytest.raises(ErrorLLM) as exc:
+        list(_cliente(_lento(proveedor, error)).responder(HOLA))
+    assert str(exc.value) == esperado
+    with pytest.raises(ErrorLLM) as exc:
+        _cliente(_lento(proveedor, error)).listar_modelos()
+    assert str(exc.value) == esperado
+
+
+@pytest.mark.parametrize("proveedor", TODOS)
+def test_a_connect_timeout_keeps_the_no_connection_message(proveedor):
+    esperado = f"No pude conectarme con {NOMBRES[proveedor]}. Revisa tu conexión a internet."
+    with pytest.raises(ErrorLLM) as exc:
+        list(_cliente(_lento(proveedor, "ConnectTimeout")).responder(HOLA))
+    assert str(exc.value) == esperado
+
+
+@pytest.mark.parametrize("proveedor", TODOS)
+def test_a_timeout_mid_answer_keeps_the_lost_connection_message(proveedor):
+    h = _modulo(proveedor)
+    if proveedor == "anthropic":
+        partes = [*_sse_claude_inicio(), _delta_claude("Hola")]
+    else:
+        partes = _sse_openai(["Hola"])[:1]
+    servidor = Servidor(proveedor, partes=partes, cortar_con=h.ReadTimeout("timed out"))
+
+    recibidas = []
+    with pytest.raises(ErrorLLM) as exc:
+        for parte in _cliente(servidor).responder(HOLA):
+            recibidas.append(parte)
+    assert recibidas == ["Hola"]
+    assert str(exc.value) == (
+        f"Se perdió la conexión con {NOMBRES[proveedor]} mientras respondía. Inténtalo de nuevo."
+    )
+
+
 @pytest.mark.parametrize("proveedor", TODOS)
 def test_connection_lost_mid_answer_keeps_delivered_fragments(proveedor):
     h = _modulo(proveedor)

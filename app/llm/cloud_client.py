@@ -47,6 +47,19 @@ _NO_CHAT = (
 
 _ERRORES_DE_RED = (openai.APIConnectionError, anthropic.APIConnectionError, httpx.HTTPError, httpx2.HTTPError)
 _ERRORES_DE_API = (openai.APIError, anthropic.APIError)
+_TIMEOUTS = (openai.APITimeoutError, anthropic.APITimeoutError, httpx.TimeoutException, httpx2.TimeoutException)
+_TIMEOUTS_DE_CONEXION = (httpx.ConnectTimeout, httpx2.ConnectTimeout)
+
+
+def _tardo(exc: Exception) -> bool:
+    """A read/write/pool timeout: the provider was reached but answered too slowly.
+
+    The SDKs wrap transport timeouts in ``APITimeoutError``; a connect timeout
+    (the cause) still means the provider could not be reached.
+    """
+    if not isinstance(exc, _TIMEOUTS):
+        return False
+    return not isinstance(exc, _TIMEOUTS_DE_CONEXION) and not isinstance(exc.__cause__, _TIMEOUTS_DE_CONEXION)
 
 
 class ClienteNube(ClienteLLM):
@@ -101,6 +114,8 @@ class ClienteNube(ClienteLLM):
         if isinstance(exc, _ERRORES_DE_RED):
             if respondiendo:
                 return ErrorLLM(f"Se perdió la conexión con {self.nombre} mientras respondía. Inténtalo de nuevo.")
+            if _tardo(exc):
+                return ErrorLLM(f"{self.nombre} tardó demasiado en responder. Inténtalo de nuevo.")
             return ErrorLLM(f"No pude conectarme con {self.nombre}. Revisa tu conexión a internet.")
         detalle = _detalle(exc)
         if self._clave:

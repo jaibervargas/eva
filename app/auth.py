@@ -37,6 +37,10 @@ MENSAJE_TIMEOUT = "No se completó el inicio de sesión con OpenRouter a tiempo.
 MENSAJE_CANCELADO = "Se canceló el inicio de sesión con OpenRouter."
 MENSAJE_SIN_CONEXION = "No pude conectarme con OpenRouter. Revisa tu conexión a internet."
 MENSAJE_RECHAZO = "OpenRouter rechazó el inicio de sesión: {detalle}"
+MENSAJE_SIN_SERVIDOR = "No pude preparar el inicio de sesión con OpenRouter: {detalle}"
+MENSAJE_SIN_NAVEGADOR = (
+    "No pude abrir el navegador. Abre esta dirección para iniciar sesión con OpenRouter: {url}"
+)
 
 
 class ErrorAuth(Exception):
@@ -181,12 +185,18 @@ def iniciar_sesion_openrouter(
     """Sign in with the user's OpenRouter account and return its API key.
 
     Blocks until the browser comes back, ``timeout`` seconds pass or
-    ``cancelado`` is set (run it off the UI loop). Raises ``ErrorAuth`` with a
-    message for the user on any failure. Does not save the key.
+    ``cancelado`` is set (run it off the UI loop); a cancel during the code
+    exchange discards the new key. ``abrir_navegador`` returning ``False`` (as
+    ``webbrowser.open`` does without a browser) or raising fails at once.
+    Raises ``ErrorAuth`` with a message for the user on any failure. Does not
+    save the key.
     """
     verifier = secrets.token_urlsafe(64)
     state = secrets.token_urlsafe(32)
-    servidor = _Servidor(state)
+    try:
+        servidor = _Servidor(state)
+    except OSError as exc:
+        raise ErrorAuth(MENSAJE_SIN_SERVIDOR.format(detalle=str(exc) or type(exc).__name__)) from exc
     hilo = threading.Thread(
         target=servidor.serve_forever, kwargs={"poll_interval": _INTERVALO_ESPERA}, daemon=True
     )
@@ -195,16 +205,25 @@ def iniciar_sesion_openrouter(
         puerto = servidor.server_address[1]
         url = AUTH_URL + "?" + urlencode(
             {
-                "callback_url": f"http://localhost:{puerto}/callback",
+                # The address the server binds: "localhost" may resolve to IPv6 first.
+                "callback_url": f"http://127.0.0.1:{puerto}/callback",
                 "code_challenge": _code_challenge(verifier),
                 "code_challenge_method": "S256",
                 "state": state,
             }
         )
-        abrir_navegador(url)
+        try:
+            abierto = abrir_navegador(url)
+        except Exception as exc:
+            raise ErrorAuth(MENSAJE_SIN_NAVEGADOR.format(url=url)) from exc
+        if abierto is False:
+            raise ErrorAuth(MENSAJE_SIN_NAVEGADOR.format(url=url))
         codigo = _esperar_codigo(servidor, timeout, cancelado)
     finally:
         servidor.shutdown()
         servidor.server_close()
         hilo.join(5)
-    return _canjear(codigo, verifier, http_client)
+    clave = _canjear(codigo, verifier, http_client)
+    if cancelado is not None and cancelado.is_set():
+        raise ErrorAuth(MENSAJE_CANCELADO)  # the new key is discarded, never returned
+    return clave

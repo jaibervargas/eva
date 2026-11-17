@@ -10,7 +10,7 @@ from collections.abc import Callable
 
 import flet as ft
 
-from app.auth import ErrorAuth, iniciar_sesion_openrouter
+from app.auth import MENSAJE_CANCELADO, ErrorAuth, iniciar_sesion_openrouter
 from app.config import PROVEEDORES, Config, guardar_config, resolver_modelo
 from app.llm.base import ErrorLLM
 from app.llm.cloud_client import crear_cliente
@@ -208,6 +208,10 @@ class DialogoAjustes:
     def _esperar_inicio_sesion(self, cancelado: threading.Event) -> None:
         try:
             clave = iniciar_sesion_openrouter(cancelado=cancelado)
+            # Cancelling (dialog closed, provider changed, second click) is
+            # honoured until the key is saved.
+            if cancelado.is_set():
+                raise ErrorAuth(MENSAJE_CANCELADO)
             guardar_clave("openrouter", clave)
         except (ErrorAuth, ErrorSecretos) as exc:
             error = str(exc)

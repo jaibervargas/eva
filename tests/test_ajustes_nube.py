@@ -267,6 +267,31 @@ def test_closing_the_dialog_cancels_a_pending_sign_in(monkeypatch, almacen):
     assert page.dialogos == []
 
 
+def test_a_sign_in_cancelled_while_the_key_arrives_saves_nothing(monkeypatch, almacen):
+    # The dialog closes while the login is finishing (e.g. during the code
+    # exchange) and the login still hands back a key: it must not be saved.
+    dialogos: list[DialogoAjustes] = []
+
+    def cerrar_y_devolver(cancelado=None):
+        dialogos[0]._cancelar(None)
+        return "sk-or-1"
+
+    monkeypatch.setattr(ajustes, "iniciar_sesion_openrouter", cerrar_y_devolver)
+    nube = NubeFalsa(modelos=["anthropic/claude-x"], claves=["sk-or-1"])
+    dialogo, nube, page, aplicadas = _dialogo(monkeypatch, Config(proveedor="openrouter"), nube=nube)
+    dialogos.append(dialogo)
+    llamadas_antes = list(nube.llamadas)
+    dialogo._iniciar_sesion(None)
+
+    assert secretos.leer_clave("openrouter") is None
+    assert almacen.datos == {}
+    assert nube.llamadas == llamadas_antes  # models are not reloaded
+    assert dialogo.estado.value == MENSAJE_CANCELADO
+    assert dialogo.boton_openrouter.content == "Iniciar sesión con OpenRouter"
+    assert page.dialogos == []
+    assert aplicadas == []
+
+
 # ----- chat connection -----
 
 

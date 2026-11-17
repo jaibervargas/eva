@@ -22,6 +22,14 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 2) are verbatim; decisions below them
   Design: `extraer_hechos` distinguishes unreadable output from a valid `[]`. The settings remember the last saved cloud provider and model as the extraction fallback (`config.json`: `"respaldo": {"proveedor", "modelo"}`, no key). When the chat provider is local and the fallback's key exists, `MemoriaUsuario.aprender` retries once with that cloud client; a valid `[]` from the local model never calls the cloud; a cloud failure saves nothing and never raises. When the chat provider is already a cloud one, there is no second attempt.
 - S6: requirements pin `anthropic` and `keyring`; the plan checkboxes and README are updated; every new user message is covered by a test through the public interface.
 
+- S7 (review advisories, user chose "1" = fix them as proposed): one small test-first commit.
+  (a) R1-001/R3-003/R4-cancel-during-exchange: cancelling is honoured until the key is saved: `iniciar_sesion_openrouter` checks `cancelado` after the code exchange and raises `ErrorAuth("Se canceló el inicio de sesión con OpenRouter.")` (the minted key is discarded, never returned); `ajustes` also re-checks the event before `guardar_clave` and never saves when it is set (dialog closed, provider changed or second click).
+  (b) R3-004/R4-loopback-ipv4-only: the callback URL uses `http://127.0.0.1:<port>/callback` (the address the server binds).
+  (c) R3-005: an `OSError` while starting the loopback server raises `ErrorAuth("No pude preparar el inicio de sesión con OpenRouter: <detalle>")`.
+  (d) R3-001: when `abrir_navegador` returns False (or raises), fail at once with `ErrorAuth("No pude abrir el navegador. Abre esta dirección para iniciar sesión con OpenRouter: <url>")` and the server closes.
+  (e) R3-006: read/write/pool timeouts from a reachable provider give "<Proveedor> tardó demasiado en responder. Inténtalo de nuevo." (before the answer starts) instead of the no-connection message; connect errors keep "No pude conectarme con <Proveedor>. Revisa tu conexión a internet."; a timeout mid-answer keeps the lost-connection message.
+  R3-002 (first bad callback aborts) stays as is by design.
+
 ## Tasks
 
 - T1 [S1, S2] `app/llm/cloud_client.py`, `app/secretos.py`, requirements, tests — route: gentle-ai-worker (parallel with T2) — done, commit 74a632e (see L6)
@@ -29,6 +37,8 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 2) are verbatim; decisions below them
 - T3 [S3] providers in config, settings dialog, chat factory wiring, tests — route: inline after T1+T2 — done, commit 726386a (see L8)
 - T4 [S5] cloud fallback for fact extraction, tests — route: inline — done, commit 151e3f1 (see L9)
 - T5 [S6] docs/plan + README, independent verify (Risk items 2 credentials, 5 dependencies), commits — route: inline + gentle-ai-verify — done, commits 09c08f1 + this one (L10, L11)
+
+- T6 [S7] fix review advisories in app/auth.py, app/ui/ajustes.py, app/llm/cloud_client.py with tests — route: gentle-ai-worker (context backstop) — done (L14)
 
 ## Log
 
@@ -44,3 +54,5 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 2) are verbatim; decisions below them
 - L10 (T5): README (settings, keys, OpenRouter, memory fallback, status → next 2D) and docs/plan-de-trabajo.md checkboxes updated; plan-de-trabajo.pdf not regenerated. Slice note: the branch is stacked on 2B, so the harness slice counter (since origin/main) includes 2B commits; 2C commits are individually reviewable.
 - L11 (independent verify, Risk items 2 and 5): S1-S6 met, no blockers; 373 passed, 2 skipped; `pip check` clean; httpx2 required by both anthropic and openai 3.52. Advisories pending a user decision: A1 callback says localhost but server binds IPv4 127.0.0.1 only; A2 cancelling during the code exchange still saves the key; A3 a port bind OSError surfaces as "Ocurrió un error inesperado" instead of ErrorAuth; A4 `ErrorLLM ... from exc` keeps the unmasked provider exception in the chain (nothing logs it today); A5 the first bad /callback request aborts the sign-in. Suggested extra tests: callback page never shows the code, server closed when the browser cannot open, loopback-only bind, keyring set error masks the key, Claude 400 echoing the key is masked, a list without usable facts never calls the cloud.
 - L12 (native review): lineage review-3d7be850be2ceccf (base feat/fase-2b-engram, lenses risk/resilience/reliability) approved and acknowledged (authority burned). Reviewers: risk and reliability anthropic/claude-haiku-5-5, resilience anthropic/claude-opus-5-5. 9 non-blocking advisories, pending a user decision: R1-001/R3-003/R4-cancel-during-exchange (cancel after the callback still saves the key = A2), R3-001 (abrir_navegador result ignored: no browser waits 300 s), R3-002 (first bad /callback aborts = A5), R3-004/R4-loopback-ipv4-only (localhost vs 127.0.0.1 = A1), R3-005 (bind OSError not ErrorAuth = A3), R3-006 (read/write timeouts reported as "no connection").
+- L13 (user): asked to fix the advisories as proposed ("1"); R3-002 kept as is.
+- L14 (T6, worker evidence): first worker run stalled after partial auth edits; continued. RED: test_auth 19 failed (localhost vs 127.0.0.1, raw OSError, 30 s wait), ajustes saved the cancelled key, 12 cloud timeout tests got the no-connection message. GREEN 405 passed, 2 skipped (parent re-ran). Decisions: only an explicit False from abrir_navegador means no browser (None still waits); a timeout while reading the stream keeps the lost-connection message. Masking/no-usable-facts tests passed without code changes (behavior already existed).

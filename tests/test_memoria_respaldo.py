@@ -93,6 +93,20 @@ def test_a_valid_empty_answer_never_calls_the_cloud():
     assert _titulos(falsa) == []
 
 
+@pytest.mark.parametrize(
+    "salida",
+    ['[{"titulo": "", "contenido": "x"}]', '[{"otro": 1}, "texto", 3]', '```json\n[{"titulo": "Nombre"}]\n```'],
+)
+def test_a_list_without_usable_facts_never_calls_the_cloud(salida):
+    memoria, falsa = _usuario()
+    pedidos = []
+
+    assert memoria.aprender(LLMGuion(extraccion=salida), ANA, respaldo=lambda: pedidos.append(1)) == []
+
+    assert pedidos == []
+    assert _titulos(falsa) == []
+
+
 def test_readable_local_facts_never_call_the_cloud():
     memoria, falsa = _usuario()
     pedidos = []

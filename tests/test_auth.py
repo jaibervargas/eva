@@ -10,7 +10,9 @@ import hashlib
 import http.client
 import json
 import socket
+import socketserver
 import threading
+import time
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlencode, urlsplit
 
@@ -26,6 +28,7 @@ MENSAJE_NO_AUTORIZO = "OpenRouter no autorizó el inicio de sesión."
 MENSAJE_TIMEOUT = "No se completó el inicio de sesión con OpenRouter a tiempo. Inténtalo de nuevo."
 MENSAJE_CANCELADO = "Se canceló el inicio de sesión con OpenRouter."
 MENSAJE_SIN_CONEXION = "No pude conectarme con OpenRouter. Revisa tu conexión a internet."
+MENSAJE_SIN_NAVEGADOR = "No pude abrir el navegador. Abre esta dirección para iniciar sesión con OpenRouter: {url}"
 
 
 @dataclass
@@ -64,12 +67,10 @@ class NavegadorFalso:
         assert "=" not in self.params["code_challenge"]
         callback = urlsplit(self.params["callback_url"])
         assert callback.scheme == "http"
-        assert callback.hostname == "localhost"
+        assert callback.hostname == "127.0.0.1"
         assert callback.path == "/callback"
         self.puerto = callback.port
         if self.consulta is not None:
-            # 127.0.0.1 instead of "localhost": same server, but avoids the slow
-            # IPv6 fallback on Windows.
             destino = f"http://127.0.0.1:{self.puerto}/callback?{urlencode(self.consulta(self.params))}"
             self.hilo = threading.Thread(target=self._visitar, args=(destino,), daemon=True)
             self.hilo.start()
@@ -261,17 +262,114 @@ def test_server_port_is_released_after_an_error():
     assert _puerto_libre(navegador.puerto)
 
 
-def test_server_closes_when_the_browser_cannot_open():
-    puertos = []
+def _navegador_que_falla(urls, resultado):
+    def abrir(url):
+        urls.append(url)
+        if isinstance(resultado, Exception):
+            raise resultado
+        return resultado
 
-    def navegador_roto(url):
-        puertos.append(urlsplit(parse_qs(urlsplit(url).query)["callback_url"][0]).port)
-        raise OSError("sin navegador")
+    return abrir
 
-    with pytest.raises(OSError):
-        iniciar_sesion_openrouter(abrir_navegador=navegador_roto, timeout=1)
 
-    assert _puerto_libre(puertos[0])
+def _puerto_de(url):
+    return urlsplit(parse_qs(urlsplit(url).query)["callback_url"][0]).port
+
+
+@pytest.mark.parametrize("resultado", [False, OSError("sin navegador")], ids=["devuelve-false", "lanza"])
+def test_when_the_browser_cannot_open_it_fails_at_once_with_the_url(resultado):
+    urls: list[str] = []
+    inicio = time.monotonic()
+
+    with pytest.raises(ErrorAuth) as exc:
+        iniciar_sesion_openrouter(
+            abrir_navegador=_navegador_que_falla(urls, resultado),
+            timeout=30,
+            http_client=httpx.Client(transport=httpx.MockTransport(lambda r: pytest.fail("no exchange"))),
+        )
+
+    assert time.monotonic() - inicio < 5
+    (url,) = urls
+    assert url.startswith("https://openrouter.ai/auth?")
+    assert str(exc.value) == MENSAJE_SIN_NAVEGADOR.format(url=url)
+    assert _puerto_libre(_puerto_de(url))
+
+
+def test_a_browser_returning_none_still_waits_for_the_callback():
+    # Only an explicit False means "no browser"; other callables may return None.
+    navegador = NavegadorFalso()
+    abrir = lambda url: navegador(url) and None  # noqa: E731
+
+    assert iniciar_sesion_openrouter(
+        abrir_navegador=abrir, timeout=5, http_client=OpenRouterFalso(navegador).cliente()
+    ) == CLAVE
+    navegador.esperar()
+
+
+def test_server_start_error_is_an_error_auth(monkeypatch):
+    def sin_puerto(self):
+        raise OSError("puerto ocupado")
+
+    monkeypatch.setattr(socketserver.TCPServer, "server_bind", sin_puerto)
+    abiertas: list[str] = []
+
+    with pytest.raises(ErrorAuth) as exc:
+        iniciar_sesion_openrouter(abrir_navegador=abiertas.append, timeout=1)
+
+    assert str(exc.value) == "No pude preparar el inicio de sesión con OpenRouter: puerto ocupado"
+    assert abiertas == []
+
+
+def test_cancel_during_the_code_exchange_discards_the_key():
+    cancelado = threading.Event()
+    navegador = NavegadorFalso()
+    openrouter = OpenRouterFalso(navegador)
+    responder = openrouter.__call__
+
+    def canjear_y_cancelar(request):
+        respuesta = responder(request)
+        cancelado.set()  # the user closes the dialog while the exchange runs
+        return respuesta
+
+    with pytest.raises(ErrorAuth) as exc:
+        iniciar_sesion_openrouter(
+            abrir_navegador=navegador,
+            timeout=5,
+            http_client=httpx.Client(transport=httpx.MockTransport(canjear_y_cancelar)),
+            cancelado=cancelado,
+        )
+    navegador.esperar()
+
+    assert str(exc.value) == MENSAJE_CANCELADO
+    assert CLAVE not in str(exc.value)
+    assert len(openrouter.pedidos) == 1
+    assert _puerto_libre(navegador.puerto)
+
+
+def test_the_callback_page_never_shows_the_code():
+    correcto = NavegadorFalso()
+    _iniciar(correcto)
+    equivocado = NavegadorFalso(lambda p: {"code": CODIGO, "state": "otro-estado"})
+    with pytest.raises(ErrorAuth):
+        _iniciar(equivocado)
+
+    for navegador in (correcto, equivocado):
+        assert CODIGO not in navegador.respuesta.text
+
+
+def test_the_server_listens_only_on_loopback(monkeypatch):
+    direcciones = []
+    enlazar = socketserver.TCPServer.server_bind
+
+    def espiar(self):
+        enlazar(self)
+        direcciones.append(self.socket.getsockname()[0])
+
+    monkeypatch.setattr(socketserver.TCPServer, "server_bind", espiar)
+    navegador = NavegadorFalso()
+    _iniciar(navegador)
+
+    assert direcciones == ["127.0.0.1"]
 
 
 def test_secrets_never_reach_the_logs(caplog, capfd):
