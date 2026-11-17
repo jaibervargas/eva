@@ -144,3 +144,61 @@ def test_listar_modelos_skips_embedding_models():
         models=["qwen/qwen3-1.7b", "text-embedding-nomic-embed-text-v1.5", "google/gemma"]
     )
     assert _client(server).listar_modelos() == ["qwen/qwen3-1.7b", "google/gemma"]
+
+
+# ----- S1: transport failures while streaming -----
+
+PERDIDA = (
+    "Se perdió la conexión con el modelo local mientras respondía. "
+    "Revisa que LM Studio u Ollama siga abierto e inténtalo de nuevo."
+)
+
+
+class _StreamCortado(httpx.SyncByteStream):
+    """Sends some SSE chunks, then the connection breaks with ``error``."""
+
+    def __init__(self, chunks, error):
+        self.chunks = chunks
+        self.error = error
+
+    def __iter__(self):
+        for c in self.chunks:
+            yield f"data: {json.dumps(c)}\n\n".encode()
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    "error",
+    [httpx.RemoteProtocolError("peer closed connection"), httpx.ReadTimeout("timed out")],
+)
+def test_stream_broken_mid_answer_raises_error_llm_after_delivering_fragments(error):
+    def server(request):
+        return httpx.Response(
+            200,
+            stream=_StreamCortado([_chunk(content="Hola"), _chunk(content=", soy")], error),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    recibidas = []
+    with pytest.raises(ErrorLLM) as exc:
+        for parte in _client(server).responder([{"role": "user", "content": "hola"}]):
+            recibidas.append(parte)
+    assert recibidas == ["Hola", ", soy"]
+    assert str(exc.value) == PERDIDA
+
+
+# ----- S5: short timeout for listing models -----
+
+
+def test_listing_models_uses_a_short_timeout_but_chat_keeps_the_long_one():
+    from app.llm.local_client import TIMEOUT_MODELOS
+
+    server = FakeServer(chunks=[_chunk(content="ok")], models=["a"])
+    cliente = conectar(LMSTUDIO_URL, "", http_client=_http(server))
+    list(cliente.responder([{"role": "user", "content": "hola"}]))
+
+    modelos, chat = server.requests
+    assert TIMEOUT_MODELOS == 5.0
+    assert modelos.url.path.endswith("/models")
+    assert modelos.extensions["timeout"]["read"] == 5.0
+    assert chat.extensions["timeout"]["read"] == 120.0

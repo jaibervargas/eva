@@ -40,6 +40,14 @@ def _ahora() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _insertar_mensajes(db: sqlite3.Connection, conversacion_id: int, mensajes: list[Mensaje]) -> None:
+    ahora = _ahora()
+    db.executemany(
+        "INSERT INTO mensajes (conversacion_id, rol, contenido, creado) VALUES (?, ?, ?, ?)",
+        [(conversacion_id, m["role"], m["content"], ahora) for m in mensajes],
+    )
+
+
 class Historial:
     def __init__(self, ruta: Path | str) -> None:
         self.ruta = Path(ruta)
@@ -65,12 +73,23 @@ class Historial:
 
     def agregar_mensajes(self, conversacion_id: int, mensajes: list[Mensaje]) -> None:
         """Append messages atomically: either all are saved or none."""
-        ahora = _ahora()
         with self._conexion() as db:
-            db.executemany(
-                "INSERT INTO mensajes (conversacion_id, rol, contenido, creado) VALUES (?, ?, ?, ?)",
-                [(conversacion_id, m["role"], m["content"], ahora) for m in mensajes],
-            )
+            _insertar_mensajes(db, conversacion_id, mensajes)
+
+    def guardar_turno(self, conversacion_id: int | None, titulo: str, mensajes: list[Mensaje]) -> int:
+        """Save a turn in one transaction and return the conversation id.
+
+        With ``conversacion_id`` None a conversation titled ``titulo`` is
+        created first; if any message fails, nothing is saved.
+        """
+        with self._conexion() as db:
+            if conversacion_id is None:
+                cur = db.execute(
+                    "INSERT INTO conversaciones (titulo, creada) VALUES (?, ?)", (titulo, _ahora())
+                )
+                conversacion_id = int(cur.lastrowid)
+            _insertar_mensajes(db, conversacion_id, mensajes)
+        return conversacion_id
 
     def mensajes(self, conversacion_id: int, limite: int | None = None) -> list[Mensaje]:
         """Messages of a conversation in chronological order; only the last ``limite`` if given."""

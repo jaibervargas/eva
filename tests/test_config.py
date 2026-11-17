@@ -69,3 +69,29 @@ def test_resolver_modelo_falls_back_to_the_first_installed_model():
     assert resolver_modelo("borrado", ["a", "b"]) == "a"
     assert resolver_modelo("", ["a", "b"]) == "a"
     assert resolver_modelo("x", []) == ""
+
+
+# ----- S4: a failed save cleans up and keeps the previous settings -----
+
+
+def test_failed_replace_removes_the_temp_file_and_keeps_the_old_config(tmp_path, monkeypatch):
+    ruta = tmp_path / "config.json"
+    guardar_config(Config(proveedor="ollama", modelo="viejo"), ruta)
+    anterior = ruta.read_text(encoding="utf-8")
+
+    def bloqueado(origen, destino):
+        raise PermissionError(13, "Acceso denegado")
+
+    monkeypatch.setattr("app.config.os.replace", bloqueado)
+    with pytest.raises(PermissionError):
+        guardar_config(Config(proveedor="lmstudio", modelo="nuevo"), ruta)
+
+    assert ruta.read_text(encoding="utf-8") == anterior
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["config.json"]
+
+
+def test_failed_write_raises_oserror_and_leaves_no_temp_file(tmp_path):
+    ruta = tmp_path / "no-existe" / "config.json"
+    with pytest.raises(OSError):
+        guardar_config(Config(), ruta)
+    assert not ruta.with_suffix(".json.tmp").exists()

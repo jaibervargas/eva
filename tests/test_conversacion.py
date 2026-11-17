@@ -1,5 +1,7 @@
 """Tests for Eva's system prompt and the persisted conversation."""
 
+import sqlite3
+
 import pytest
 
 from app.llm.base import ClienteLLM, ErrorLLM
@@ -108,4 +110,16 @@ def test_failed_turn_raises_and_saves_nothing(historial):
 
     with pytest.raises(ErrorLLM, match="sin conexión"):
         list(conv.enviar("hola"))
+    assert historial.listar_conversaciones() == []
+
+
+def test_failed_save_leaves_no_empty_conversation(historial):
+    # The database refuses new messages (e.g. disk full) after the answer streamed.
+    with sqlite3.connect(historial.ruta) as db:
+        db.execute("CREATE TRIGGER falla BEFORE INSERT ON mensajes BEGIN SELECT RAISE(ABORT, 'disco lleno'); END")
+    conv = Conversacion(FakeLLM(partes=["Hola"]), historial)
+
+    with pytest.raises(sqlite3.IntegrityError, match="disco lleno"):
+        list(conv.enviar("hola"))
+    assert conv.conversacion_id is None
     assert historial.listar_conversaciones() == []

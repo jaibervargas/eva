@@ -1,5 +1,6 @@
 """User data folder and app settings."""
 
+import contextlib
 import json
 import os
 import sys
@@ -59,12 +60,21 @@ def cargar_config(ruta: Path | None = None) -> Config:
 
 
 def guardar_config(config: Config, ruta: Path | None = None) -> None:
-    """Write config.json atomically (a crash never leaves a half-written file)."""
+    """Write config.json atomically (a crash never leaves a half-written file).
+
+    Raises ``OSError`` if the file cannot be written (e.g. on Windows when
+    another program holds it open); the previous file is left untouched.
+    """
     ruta = ruta or ruta_config()
     datos = {"proveedor": config.proveedor, "modelo": config.modelo, **config.extras}
     temporal = ruta.with_suffix(".json.tmp")
-    temporal.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(temporal, ruta)
+    try:
+        temporal.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporal, ruta)
+    except OSError:
+        with contextlib.suppress(OSError):
+            temporal.unlink(missing_ok=True)
+        raise
 
 
 def resolver_modelo(guardado: str, disponibles: list[str]) -> str:
@@ -89,4 +99,7 @@ def carpeta_datos() -> Path:
         base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
         carpeta = Path(base) / NOMBRE_APP.lower()
     carpeta.mkdir(parents=True, exist_ok=True)
+    if sys.platform != "win32":
+        # Conversations are private: only the user may read the folder.
+        os.chmod(carpeta, 0o700)
     return carpeta

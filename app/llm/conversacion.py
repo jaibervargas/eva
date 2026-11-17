@@ -51,8 +51,9 @@ class Conversacion:
 
         if not partes:
             return  # nothing to remember from an empty answer
-        if self.conversacion_id is None:
-            self.conversacion_id = self.historial.crear_conversacion(_titulo(texto))
-        self.historial.agregar_mensajes(
-            self.conversacion_id, [pregunta, {"role": "assistant", "content": "".join(partes)}]
+        # One transaction: a failed save never leaves an empty conversation.
+        self.conversacion_id = self.historial.guardar_turno(
+            self.conversacion_id,
+            _titulo(texto),
+            [pregunta, {"role": "assistant", "content": "".join(partes)}],
         )
