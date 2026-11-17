@@ -49,6 +49,8 @@ class Conversacion:
             partes.append(parte)
             yield parte
 
+        if not partes:
+            return  # nothing to remember from an empty answer
         if self.conversacion_id is None:
             self.conversacion_id = self.historial.crear_conversacion(_titulo(texto))
         self.historial.agregar_mensajes(

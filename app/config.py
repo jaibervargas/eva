@@ -52,7 +52,7 @@ def cargar_config(ruta: Path | None = None) -> Config:
     proveedor = datos.pop("proveedor", PROVEEDOR_POR_DEFECTO)
     modelo = datos.pop("modelo", "")
     return Config(
-        proveedor=proveedor if proveedor in PROVEEDORES else PROVEEDOR_POR_DEFECTO,
+        proveedor=proveedor if isinstance(proveedor, str) and proveedor in PROVEEDORES else PROVEEDOR_POR_DEFECTO,
         modelo=modelo if isinstance(modelo, str) else "",
         extras=datos,
     )

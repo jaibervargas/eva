@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from app.config import PROVEEDORES, Config, cargar_config, guardar_config, resolver_modelo
 
 
@@ -40,6 +42,13 @@ def test_unknown_provider_falls_back_to_lm_studio_and_keeps_the_model(tmp_path):
 
     cfg = cargar_config(ruta)
     assert (cfg.proveedor, cfg.modelo) == ("lmstudio", "m")
+
+
+@pytest.mark.parametrize("contenido", ['{"proveedor": []}', '{"proveedor": {"a": 1}}', '{"proveedor": 3}'])
+def test_invalid_provider_type_gives_defaults(tmp_path, contenido):
+    ruta = tmp_path / "config.json"
+    ruta.write_text(contenido, encoding="utf-8")
+    assert cargar_config(ruta) == Config()
 
 
 def test_unknown_keys_are_preserved_on_save(tmp_path):

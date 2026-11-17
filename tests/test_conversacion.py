@@ -95,6 +95,14 @@ def test_existing_conversation_continues_after_reopening(tmp_path):
     assert {"role": "user", "content": "Soy Ana"} in llm.recibidos[0]
 
 
+def test_empty_answer_is_not_saved(historial):
+    conv = Conversacion(FakeLLM(partes=[]), historial)
+
+    assert list(conv.enviar("hola")) == []
+    assert conv.conversacion_id is None
+    assert historial.listar_conversaciones() == []
+
+
 def test_failed_turn_raises_and_saves_nothing(historial):
     conv = Conversacion(FakeLLM(partes=["Ho"], error=ErrorLLM("sin conexión")), historial)
 
