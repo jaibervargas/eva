@@ -527,6 +527,31 @@ def test_quick_turns_run_one_extraction_at_a_time_covering_every_message(monkeyp
     assert llm.entradas_extraccion[0] == TURNOS[0]
 
 
+def test_extractor_survives_a_screen_refresh_error(monkeypatch, tmp_path):
+    llm = LLMVigilado(espera_extraccion=0)
+    page = PaginaHilos()
+    pantalla = _pantalla(monkeypatch, tmp_path, llm, page)
+    pantalla.iniciar()
+    fallos = []
+    original = pantalla._actualizar_nota_memoria
+
+    def romper_una_vez():
+        # Fail only the refresh made by the background extractor.
+        if not fallos and sys._getframe(1).f_code.co_name == "_aprender":
+            fallos.append(1)
+            raise RuntimeError("ventana cerrándose")
+        original()
+
+    pantalla._actualizar_nota_memoria = romper_una_vez
+    for texto in TURNOS[:2]:
+        assert _esperar(lambda: not pantalla.ocupado)
+        _enviar(pantalla, texto)
+        assert _esperar(lambda: all(not h.is_alive() for h in page.hilos), limite=5)
+
+    assert fallos == [1]
+    assert TURNOS[1] in "\n".join(llm.entradas_extraccion)  # learning did not stop
+
+
 def test_extraction_waits_while_an_answer_is_streaming(monkeypatch, tmp_path):
     llm = LLMVigilado(espera_extraccion=0)
     page = PaginaManual()

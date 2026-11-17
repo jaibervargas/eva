@@ -193,8 +193,11 @@ class PantallaChat:
             self.memoria.aprender(cliente, texto)
         except Exception:  # aprender never raises; this is a last guard
             log.exception("Unexpected error saving long-term memories")
-        self._actualizar_nota_memoria()
-        self.page.update()
+        try:
+            self._actualizar_nota_memoria()
+            self.page.update()
+        except Exception:  # e.g. the window is closing: keep the extractor alive
+            log.exception("Could not refresh the screen after learning")
 
     def _abrir_recuerdos(self) -> None:
         if self.memoria is not None:
