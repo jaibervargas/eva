@@ -48,6 +48,17 @@ LIMITE_BUSQUEDA = 20  # Engram's maximum for mem_search
 _SIN_BINARIO = "No se encontró el programa de Engram (bin/engram)"
 _SIN_RESPUESTA = "Engram no respondió a tiempo"
 _CERRADA = "La memoria a largo plazo está cerrada"
+# A fresh store has no "eva" project until the first save: Engram 3.7.2 then
+# answers searches with error_code unknown_project and `export` exits with
+# "unknown project: eva". Both mean "no memories yet", not a failure.
+_PROYECTO_DESCONOCIDO = '"unknown_project"'
+
+
+def _sin_proyecto(exc: subprocess.CalledProcessError) -> bool:
+    salida = exc.stderr or b""
+    if isinstance(salida, bytes):
+        salida = salida.decode("utf-8", "replace")
+    return "unknown project" in salida.lower()
 
 
 class ErrorMemoria(Exception):
@@ -197,6 +208,12 @@ class MemoriaEngram:
         """Why memory is unavailable (startup failure), else None."""
         return self._error
 
+    def esperar(self, timeout: float | None = None) -> bool:
+        """Wait (at most ``timeout``, default the client timeout) until Engram
+        is connected or has failed; return ``disponible``."""
+        self._listo.wait(self._timeout if timeout is None else timeout)
+        return self.disponible
+
     def buscar(self, texto: str, limite: int = 5) -> list[Recuerdo]:
         """Memories related to ``texto`` (any word may match), best first."""
         consulta = texto.strip()
@@ -207,7 +224,7 @@ class MemoriaEngram:
             "limit": min(limite, LIMITE_BUSQUEDA),
             "match_mode": "any",
             "response_format": "compact",
-        }))
+        }, si_no_hay_proyecto="{}"))
         recuerdos = []
         for r in datos.get("results") or []:
             if r.get("project", PROYECTO) != PROYECTO:
@@ -242,6 +259,10 @@ class MemoriaEngram:
             raise self._fallo(_SIN_BINARIO)
         try:
             datos = self._exportar()
+        except subprocess.CalledProcessError as exc:
+            if _sin_proyecto(exc):
+                return []
+            raise self._fallo(f"No se pudieron listar los recuerdos: {exc}") from exc
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             raise self._fallo(f"No se pudieron listar los recuerdos: {exc}") from exc
         observaciones = (datos or {}).get("observations") or []
@@ -326,8 +347,14 @@ class MemoriaEngram:
         if self._cerrada:
             raise ErrorMemoria(_CERRADA)
 
-    def _llamar(self, herramienta: str, argumentos: dict[str, Any]) -> str:
-        """Call an MCP tool from any thread; return its text or raise ErrorMemoria."""
+    def _llamar(
+        self, herramienta: str, argumentos: dict[str, Any], si_no_hay_proyecto: str | None = None
+    ) -> str:
+        """Call an MCP tool from any thread; return its text or raise ErrorMemoria.
+
+        With ``si_no_hay_proyecto``, an "unknown project" error (no memories
+        saved yet) returns that text instead of raising.
+        """
         self._comprobar()
         limite = time.monotonic() + self._timeout
         if not self._listo.wait(self._timeout):
@@ -351,6 +378,8 @@ class MemoriaEngram:
             c.text for c in getattr(resultado, "content", []) if getattr(c, "type", None) == "text"
         )
         if getattr(resultado, "isError", False):
+            if si_no_hay_proyecto is not None and _PROYECTO_DESCONOCIDO in texto:
+                return si_no_hay_proyecto
             raise self._fallo(f"Engram devolvió un error: {texto}")
         return texto
 

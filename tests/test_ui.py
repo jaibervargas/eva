@@ -443,3 +443,268 @@ def test_dialog_keeps_only_the_latest_model_load(monkeypatch):
     page.correr_pendientes()
 
     assert [opcion.text for opcion in d.modelo.options] == ["nuevo"]
+
+
+# ----- long-term memory (Fase 2B) -----
+
+from app.llm.conversacion import MemoriaUsuario  # noqa: E402
+from app.ui.recuerdos import DialogoRecuerdos  # noqa: E402
+from app.memory.engram_client import Recuerdo  # noqa: E402
+from tests.memoria_falsa import MemoriaFalsa  # noqa: E402
+from tests.test_memoria_usuario import ANA, HECHOS_ANA, LLMGuion  # noqa: E402
+
+NO_DISPONIBLE = "Memoria a largo plazo no disponible"
+VACIO = "Eva todavía no tiene recuerdos tuyos."
+
+
+def _con_memoria(monkeypatch, tmp_path, falsa, llm=None, page=None):
+    llm = llm or LLMGuion(respuesta="Hola", extraccion=HECHOS_ANA)
+    monkeypatch.setattr(chat, "conectar", lambda url, modelo: llm)
+    pantalla = PantallaChat(page or FakePage(), Historial(tmp_path / "eva.db"), Config(), MemoriaUsuario(falsa))
+
+    async def sin_foco():
+        pass
+
+    pantalla.campo.focus = sin_foco
+    return pantalla, llm
+
+
+def test_memory_note_is_hidden_while_memory_works(monkeypatch, tmp_path):
+    pantalla, _ = _con_memoria(monkeypatch, tmp_path, MemoriaFalsa())
+    pantalla.iniciar()
+
+    assert pantalla.nota_memoria.value == NO_DISPONIBLE
+    assert pantalla.nota_memoria.visible is False
+    assert pantalla.boton_recuerdos.disabled is False
+
+
+def test_unavailable_memory_shows_the_note_and_the_chat_still_answers(monkeypatch, tmp_path):
+    pantalla, llm = _con_memoria(monkeypatch, tmp_path, MemoriaFalsa(disponible=False))
+    pantalla.iniciar()
+    assert pantalla.nota_memoria.visible is True
+
+    _enviar(pantalla, ANA)
+
+    assert _valores(pantalla) == [ANA, "Hola"]
+    assert len(llm.recibidos) == 1  # no extraction without memory
+    assert pantalla.ocupado is False
+
+
+def test_without_memory_the_note_shows_and_recuerdos_is_disabled(monkeypatch, tmp_path):
+    _usar_servidor(monkeypatch, Servidor(models=["m"], chunks=[_chunk(content="Hola")]))
+    pantalla = _pantalla(tmp_path)
+    pantalla.iniciar()
+
+    assert pantalla.nota_memoria.visible is True
+    assert pantalla.boton_recuerdos.disabled is True
+    _enviar(pantalla, "hola")
+    assert _valores(pantalla) == ["hola", "Hola"]
+
+
+def test_memory_loads_off_the_ui_loop_at_startup(monkeypatch, tmp_path):
+    falsa = MemoriaFalsa([Recuerdo(1, "Nombre", "Ana")])
+    page = FakePage(ejecutar=False)
+    pantalla, _ = _con_memoria(monkeypatch, tmp_path, falsa, page=page)
+    pantalla.iniciar()
+
+    assert falsa.llamadas == []
+    assert pantalla.nota_memoria.visible is False
+    page.correr_pendientes()
+    assert falsa.llamadas == ["listar"]
+    assert pantalla.memoria.recuerdos() == [Recuerdo(1, "Nombre", "Ana")]
+
+
+def test_facts_are_learned_in_the_background_after_the_answer(monkeypatch, tmp_path):
+    falsa = MemoriaFalsa()
+    page = FakePage(ejecutar=False)
+    pantalla, llm = _con_memoria(monkeypatch, tmp_path, falsa, page=page)
+    pantalla.iniciar()
+    page.correr_pendientes()
+
+    _enviar(pantalla, ANA)
+    funcion, args = page.pendientes.pop(0)  # the answer
+    funcion(*args)
+
+    # The screen is free and answered before anything is extracted or saved.
+    assert _valores(pantalla) == [ANA, "Hola"]
+    assert pantalla.ocupado is False and pantalla.boton.disabled is False
+    assert len(page.pendientes) == 1 and falsa.datos == {}
+    assert len(llm.recibidos) == 1
+
+    page.correr_pendientes()
+    assert [(r.titulo, r.contenido) for r in falsa.listar_sin_registro()] == [
+        ("Bebida favorita", "Le gusta el café"),
+        ("Nombre", "El usuario se llama Ana"),
+    ]
+
+
+def test_a_turn_without_text_learns_nothing(monkeypatch, tmp_path):
+    falsa = MemoriaFalsa()
+    pantalla, llm = _con_memoria(monkeypatch, tmp_path, falsa, llm=LLMGuion(respuesta="", extraccion=HECHOS_ANA))
+    pantalla.iniciar()
+
+    _enviar(pantalla, ANA)
+
+    assert _valores(pantalla) == [ANA, "(Eva no devolvió texto)"]
+    assert len(llm.recibidos) == 1
+    assert falsa.datos == {}
+
+
+def test_eva_remembers_the_user_in_a_new_conversation_from_the_screen(monkeypatch, tmp_path):
+    falsa = MemoriaFalsa()
+    pantalla, llm = _con_memoria(monkeypatch, tmp_path, falsa)
+    pantalla.iniciar()
+    _enviar(pantalla, ANA)
+    primera = pantalla.conversacion_id
+
+    pantalla._nueva()
+    _enviar(pantalla, "¿Cómo me llamo?")
+
+    assert pantalla.conversacion_id != primera
+    ultimo = llm.chats()[-1]
+    assert ultimo[1]["role"] == "system"
+    assert "- Nombre: El usuario se llama Ana" in ultimo[1]["content"].split("\n")
+    assert {"role": "user", "content": ANA} not in ultimo
+    assert pantalla.historial.mensajes(pantalla.conversacion_id) == [
+        {"role": "user", "content": "¿Cómo me llamo?"},
+        {"role": "assistant", "content": "Hola"},
+    ]
+
+
+def test_memory_that_stops_working_keeps_the_chat_and_shows_the_note(monkeypatch, tmp_path, caplog):
+    falsa = MemoriaFalsa()
+    pantalla, _ = _con_memoria(monkeypatch, tmp_path, falsa)
+    pantalla.iniciar()
+    assert pantalla.nota_memoria.visible is False
+
+    falsa._disponible = False  # Engram died
+    with caplog.at_level(logging.WARNING):
+        _enviar(pantalla, ANA)
+
+    assert _valores(pantalla) == [ANA, "Hola"]
+    assert pantalla.ocupado is False
+    assert pantalla.nota_memoria.visible is True
+
+
+def test_recuerdos_opens_from_the_sidebar(monkeypatch, tmp_path):
+    page = FakePage()
+    pantalla, _ = _con_memoria(monkeypatch, tmp_path, MemoriaFalsa([Recuerdo(1, "Nombre", "Ana")]), page=page)
+    pantalla.iniciar()
+
+    pantalla._abrir_recuerdos()
+
+    (dialogo,) = page.dialogos
+    assert dialogo.title.value == "Recuerdos"
+
+
+def _filas(dialogo):
+    return [(f.title.value, f.subtitle.value) for f in dialogo.lista.controls]
+
+
+def test_recuerdos_load_off_the_ui_loop_showing_loading():
+    falsa = MemoriaFalsa([Recuerdo(1, "Nombre", "El usuario se llama Ana"), Recuerdo(2, "Bebida favorita", "Le gusta el café")])
+    page = FakePage(ejecutar=False)
+    dialogo = DialogoRecuerdos(page, MemoriaUsuario(falsa))
+    dialogo.abrir()
+
+    assert page.dialogos == [dialogo.dialogo]
+    assert dialogo.estado.value == "Cargando…"
+    assert dialogo.lista.controls == []
+    assert falsa.llamadas == []
+    page.correr_pendientes()
+
+    assert _filas(dialogo) == [("Bebida favorita", "Le gusta el café"), ("Nombre", "El usuario se llama Ana")]
+    assert dialogo.estado.value == ""
+
+
+def test_recuerdos_empty_state():
+    dialogo = DialogoRecuerdos(FakePage(), MemoriaUsuario(MemoriaFalsa()))
+    dialogo.abrir()
+
+    assert dialogo.estado.value == VACIO
+    assert dialogo.lista.controls == []
+
+
+def test_recuerdos_load_error_is_shown(caplog):
+    dialogo = DialogoRecuerdos(FakePage(), MemoriaUsuario(MemoriaFalsa(fallar="Engram no respondió a tiempo")))
+    dialogo.abrir()
+
+    assert (dialogo.estado.value, dialogo.estado.color) == (
+        "No pude cargar los recuerdos: Engram no respondió a tiempo",
+        ROJO_ERROR,
+    )
+
+
+def _pedir_borrar(page, dialogo, fila):
+    dialogo.lista.controls[fila].trailing.on_click(None)
+    confirmacion = page.dialogos[-1]
+    assert confirmacion is not dialogo.dialogo
+    return confirmacion
+
+
+def test_deleting_a_memory_asks_first_and_cancel_keeps_it():
+    falsa = MemoriaFalsa([Recuerdo(1, "Nombre", "Ana")])
+    page = FakePage()
+    dialogo = DialogoRecuerdos(page, MemoriaUsuario(falsa))
+    dialogo.abrir()
+
+    confirmacion = _pedir_borrar(page, dialogo, 0)
+    assert confirmacion.title.value == "¿Borrar este recuerdo?"
+    assert confirmacion.content.value == "Eva olvidará para siempre «Nombre»."
+    cancelar, borrar = confirmacion.actions
+    assert (cancelar.content, borrar.content) == ("Cancelar", "Borrar")
+    cancelar.on_click(None)
+
+    assert page.dialogos == [dialogo.dialogo]
+    assert "borrar" not in falsa.llamadas
+    assert _filas(dialogo) == [("Nombre", "Ana")]
+
+
+def test_confirmed_delete_is_permanent_and_updates_the_list():
+    falsa = MemoriaFalsa([Recuerdo(1, "Nombre", "Ana"), Recuerdo(2, "Ciudad", "Medellín")])
+    memoria = MemoriaUsuario(falsa)
+    memoria.cargar()
+    page = FakePage()
+    dialogo = DialogoRecuerdos(page, memoria)
+    dialogo.abrir()
+
+    _pedir_borrar(page, dialogo, 1).actions[1].on_click(None)
+
+    assert page.dialogos == [dialogo.dialogo]
+    assert 1 not in falsa.datos
+    assert _filas(dialogo) == [("Ciudad", "Medellín")]
+    assert memoria.recuerdos() == [Recuerdo(2, "Ciudad", "Medellín")]  # gone from the chat context too
+
+    _pedir_borrar(page, dialogo, 0).actions[1].on_click(None)
+    assert dialogo.estado.value == VACIO
+
+
+def test_failed_delete_is_shown_and_keeps_the_memory():
+    falsa = MemoriaFalsa([Recuerdo(1, "Nombre", "Ana")])
+    page = FakePage()
+    dialogo = DialogoRecuerdos(page, MemoriaUsuario(falsa))
+    dialogo.abrir()
+    falsa.fallar = "Engram no respondió a tiempo"
+
+    _pedir_borrar(page, dialogo, 0).actions[1].on_click(None)
+
+    assert (dialogo.estado.value, dialogo.estado.color) == (
+        "No pude borrar el recuerdo: Engram no respondió a tiempo",
+        ROJO_ERROR,
+    )
+    assert _filas(dialogo) == [("Nombre", "Ana")]
+
+
+def test_delete_runs_off_the_ui_loop():
+    falsa = MemoriaFalsa([Recuerdo(1, "Nombre", "Ana")])
+    page = FakePage(ejecutar=False)
+    dialogo = DialogoRecuerdos(page, MemoriaUsuario(falsa))
+    dialogo.abrir()
+    page.correr_pendientes()
+
+    _pedir_borrar(page, dialogo, 0).actions[1].on_click(None)
+
+    assert dialogo.estado.value == "Borrando…"
+    assert 1 in falsa.datos
+    page.correr_pendientes()
+    assert falsa.datos == {}

@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import shutil
+import subprocess
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -300,6 +301,26 @@ def test_listar_with_empty_export(fake, tmp_path):
         m.cerrar()
 
 
+def test_new_store_without_eva_memories_lists_and_finds_nothing(fake, tmp_path, caplog):
+    # A fresh Engram store has no "eva" project until the first save (seen live with 3.7.2).
+    def exportar():
+        raise subprocess.CalledProcessError(1, ["engram", "export"], stderr=b"engram: unknown project: eva\n")
+
+    fake._mem_search = lambda a: _texto(
+        '{"available_projects":null,"error_code":"unknown_project",'
+        '"message":"Project \\"eva\\" not found in store"}',
+        error=True,
+    )
+    m = MemoriaEngram(carpeta=tmp_path, conectar=fake.conectar, exportar=exportar, timeout=2)
+    try:
+        with caplog.at_level(logging.WARNING):
+            assert m.listar() == []
+            assert m.buscar("hola") == []
+        assert caplog.records == []
+    finally:
+        m.cerrar()
+
+
 def test_listar_export_failure_raises(fake, tmp_path):
     def falla():
         raise OSError("disco")
@@ -422,6 +443,32 @@ def test_connected_memory_is_available(memoria, fake):
     assert memoria.error is None
 
 
+def test_esperar_waits_for_the_connection(memoria, fake):
+    assert memoria.esperar() is True
+    assert fake.entradas == 1
+
+
+def test_esperar_reports_unavailable_memory_without_waiting(tmp_path, monkeypatch):
+    monkeypatch.setattr(ec, "buscar_binario", lambda carpeta=None: None)
+    m = MemoriaEngram(carpeta=tmp_path, timeout=5)
+    inicio = time.monotonic()
+    assert m.esperar() is False
+    assert time.monotonic() - inicio < 1
+
+
+def test_esperar_gives_up_after_the_timeout(tmp_path):
+    @asynccontextmanager
+    async def colgado():
+        await asyncio.sleep(60)
+        yield
+
+    m = MemoriaEngram(carpeta=tmp_path, conectar=colgado, timeout=0.3)
+    try:
+        assert m.esperar() is False
+    finally:
+        m.cerrar()
+
+
 def test_cerrar_ends_session_is_idempotent_and_blocks_later_calls(fake, tmp_path):
     m = MemoriaEngram(carpeta=tmp_path, conectar=fake.conectar, timeout=2)
     m.buscar("x")
@@ -479,6 +526,13 @@ def test_real_engram_save_search_list_delete(real_memoria):
     with pytest.raises(ErrorMemoria):
         m.borrar(id_)
     assert (carpeta / "engram.db").exists()
+
+
+@real
+def test_real_new_store_is_empty_not_an_error(real_memoria):
+    m, _ = real_memoria
+    assert m.listar() == []
+    assert m.buscar("hola") == []
 
 
 @real

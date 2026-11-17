@@ -6,10 +6,11 @@ import flet as ft
 
 from app.config import PROVEEDORES, Config
 from app.llm.base import ErrorLLM
-from app.llm.conversacion import Conversacion
+from app.llm.conversacion import Conversacion, MemoriaUsuario
 from app.llm.local_client import ClienteLocal, conectar
 from app.memory.history import Historial
 from app.ui.ajustes import DialogoAjustes
+from app.ui.recuerdos import DialogoRecuerdos
 
 FONDO = "#0F1117"
 FONDO_LATERAL = "#161A23"
@@ -22,6 +23,7 @@ RADIO = 12
 ANCHO_LATERAL = 260
 PENSANDO = "…"
 CONECTANDO = "Conectando…"
+SIN_MEMORIA = "Memoria a largo plazo no disponible"
 
 log = logging.getLogger(__name__)
 
@@ -45,10 +47,18 @@ def _burbuja(texto: ft.Text, de_usuario: bool) -> ft.Control:
 
 
 class PantallaChat:
-    def __init__(self, page: ft.Page, historial: Historial, config: Config) -> None:
+    def __init__(
+        self,
+        page: ft.Page,
+        historial: Historial,
+        config: Config,
+        memoria: MemoriaUsuario | None = None,
+    ) -> None:
         self.page = page
         self.historial = historial
         self.config = config
+        # Long-term memory (Engram); None when it could not even be created.
+        self.memoria = memoria
         self.cliente: ClienteLocal | None = None
         self.conversacion_id: int | None = None  # None: new, not yet saved
         # True while connecting or answering: send, new, open and settings wait.
@@ -73,6 +83,15 @@ class PantallaChat:
         # Sidebar
         self.lista = ft.ListView(expand=True, spacing=2)
         self.etiqueta_modelo = ft.Text("", size=12, color=GRIS_TEXTO, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
+        # Discreet note under the model label; hidden while memory works.
+        self.nota_memoria = ft.Text(SIN_MEMORIA, size=11, color=GRIS_TEXTO, italic=True, visible=False)
+        self.boton_recuerdos = ft.TextButton(
+            "Recuerdos",
+            icon=ft.Icons.PSYCHOLOGY_OUTLINED,
+            tooltip="Lo que Eva recuerda de ti",
+            on_click=lambda e: self._abrir_recuerdos(),
+            disabled=memoria is None,
+        )
 
     # ----- layout -----
 
@@ -91,10 +110,14 @@ class PantallaChat:
                     ),
                     ft.Text("Conversaciones", size=12, color=GRIS_TEXTO),
                     self.lista,
+                    self.boton_recuerdos,
                     ft.Divider(height=1),
                     ft.Row(
                         [
-                            ft.Container(self.etiqueta_modelo, expand=True),
+                            ft.Container(
+                                ft.Column([self.etiqueta_modelo, self.nota_memoria], spacing=2, tight=True),
+                                expand=True,
+                            ),
                             ft.IconButton(icon=ft.Icons.SETTINGS, tooltip="Ajustes", on_click=lambda e: self._abrir_ajustes()),
                         ]
                     ),
@@ -109,9 +132,40 @@ class PantallaChat:
         return ft.Row([lateral, chat], expand=True, spacing=0)
 
     def iniciar(self) -> None:
-        """Show the saved conversations and connect to the model server."""
+        """Show the saved conversations, connect to the model server and load
+        the long-term memory (both off the UI loop)."""
         self._refrescar_lista()
         self._conectar_en_segundo_plano()
+        if self.memoria is None:
+            self._actualizar_nota_memoria()
+        else:
+            self.page.run_thread(self._cargar_memoria)
+
+    # ----- long-term memory -----
+
+    def _actualizar_nota_memoria(self) -> None:
+        self.nota_memoria.visible = self.memoria is None or not self.memoria.disponible
+
+    def _cargar_memoria(self) -> None:
+        try:
+            self.memoria.cargar()
+        except Exception:  # cargar logs its own failures; this is a last guard
+            log.exception("Unexpected error loading long-term memory")
+        self._actualizar_nota_memoria()
+        self.page.update()
+
+    def _aprender(self, cliente, texto: str) -> None:
+        """Save facts from the user's message (background, after the answer)."""
+        try:
+            self.memoria.aprender(cliente, texto)
+        except Exception:  # aprender never raises; this is a last guard
+            log.exception("Unexpected error saving long-term memories")
+        self._actualizar_nota_memoria()
+        self.page.update()
+
+    def _abrir_recuerdos(self) -> None:
+        if self.memoria is not None:
+            DialogoRecuerdos(self.page, self.memoria).abrir()
 
     # ----- model connection and settings -----
 
@@ -248,8 +302,10 @@ class PantallaChat:
         return respuesta
 
     def _responder(self, texto: str, respuesta: ft.Text) -> None:
-        conversacion = Conversacion(self.cliente, self.historial, self.conversacion_id)
+        cliente = self.cliente
+        conversacion = Conversacion(cliente, self.historial, self.conversacion_id, memoria=self.memoria)
         acumulado = ""
+        aprender = False
         try:
             for parte in conversacion.enviar(texto):
                 acumulado += parte
@@ -258,6 +314,7 @@ class PantallaChat:
             if not acumulado:
                 respuesta.value = "(Eva no devolvió texto)"
             self.conversacion_id = conversacion.conversacion_id
+            aprender = bool(acumulado) and self.memoria is not None
         except ErrorLLM as exc:
             respuesta.value = str(exc)
             respuesta.color = ROJO_ERROR
@@ -269,4 +326,8 @@ class PantallaChat:
         finally:
             self._ocupar(False)
             self._refrescar_lista()
+            self._actualizar_nota_memoria()
             self.page.update()
+        if aprender:
+            # Its own thread: the screen is already free for the next question.
+            self.page.run_thread(self._aprender, cliente, texto)
