@@ -12,10 +12,13 @@ project ``eva`` (``ENGRAM_PROJECT``), never in the developer's ``~/.engram``.
 Errors: every operation either returns its documented value or raises
 ``ErrorMemoria`` (Engram missing, failed to start, timed out, replied with an
 error or with something unexpected, or the memory was closed). Each failure
-is logged. ``cerrar()`` never raises.
+is logged. ``cerrar()`` never raises. If the Engram process dies or its
+connection breaks mid-session, the memory becomes unavailable (``disponible``
+False, ``error`` set) and later calls fail at once instead of waiting.
 """
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import os
@@ -32,8 +35,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+import anyio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
+from mcp.shared.exceptions import McpError
+from mcp.types import CONNECTION_CLOSED
 
 from app.config import carpeta_datos
 
@@ -48,6 +54,7 @@ LIMITE_BUSQUEDA = 20  # Engram's maximum for mem_search
 _SIN_BINARIO = "No se encontró el programa de Engram (bin/engram)"
 _SIN_RESPUESTA = "Engram no respondió a tiempo"
 _CERRADA = "La memoria a largo plazo está cerrada"
+_DETENIDA = "Engram se detuvo"
 # A fresh store has no "eva" project until the first save: Engram 3.7.2 then
 # answers searches with error_code unknown_project and `export` exits with
 # "unknown project: eva". Both mean "no memories yet", not a failure.
@@ -59,6 +66,33 @@ def _sin_proyecto(exc: subprocess.CalledProcessError) -> bool:
     if isinstance(salida, bytes):
         salida = salida.decode("utf-8", "replace")
     return "unknown project" in salida.lower()
+
+
+def _describir(exc: BaseException) -> str:
+    return str(exc) or type(exc).__name__
+
+
+def _conexion_perdida(exc: BaseException) -> bool:
+    """Whether a failed call means the server/process is gone (not a one-off error)."""
+    if isinstance(exc, McpError):
+        return getattr(exc.error, "code", None) == CONNECTION_CLOSED
+    return isinstance(exc, (
+        anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream, EOFError, OSError,
+    ))
+
+
+def _id_valido(resultado: Any) -> int | None:
+    """The numeric id of a search result or observation, else None."""
+    if not isinstance(resultado, dict):
+        return None
+    id_ = resultado.get("id")
+    if isinstance(id_, bool):
+        return None
+    if isinstance(id_, int):
+        return id_
+    if isinstance(id_, str) and id_.strip().isdigit():
+        return int(id_)
+    return None
 
 
 class ErrorMemoria(Exception):
@@ -126,9 +160,27 @@ def _conectar_stdio(binario: Path, carpeta: Path) -> Conectar:
         # The server's stderr goes to a log file: a windowed app may have no stderr.
         with open(carpeta / "engram-mcp.log", "a", encoding="utf-8") as errlog:
             async with stdio_client(parametros_servidor(binario, carpeta), errlog=errlog) as (leer, escribir):
-                async with ClientSession(leer, escribir) as sesion:
-                    await sesion.initialize()
-                    yield sesion
+                # stdio_client does not end the session when the process dies;
+                # relay its output and fail the connection at end of stream.
+                hacia_sesion, desde_proceso = anyio.create_memory_object_stream(0)
+                async with anyio.create_task_group() as grupo:
+
+                    async def reenviar():
+                        async with hacia_sesion:
+                            try:
+                                async for mensaje in leer:
+                                    await hacia_sesion.send(mensaje)
+                            except (anyio.BrokenResourceError, anyio.ClosedResourceError):
+                                return  # the session closed first: normal shutdown
+                        raise ConnectionError("el proceso de Engram terminó")
+
+                    grupo.start_soon(reenviar)
+                    try:
+                        async with ClientSession(desde_proceso, escribir) as sesion:
+                            await sesion.initialize()
+                            yield sesion
+                    finally:
+                        grupo.cancel_scope.cancel()
 
     return conectar
 
@@ -221,27 +273,44 @@ class MemoriaEngram:
         return self.disponible
 
     def buscar(self, texto: str, limite: int = 5) -> list[Recuerdo]:
-        """Memories related to ``texto`` (any word may match), best first."""
+        """Memories related to ``texto`` (any word may match), best first.
+
+        One deadline (the client timeout) covers the search and every
+        full-content fetch; once it is spent, the remaining hits keep their
+        preview, or are dropped when they have none. Malformed results are
+        skipped and logged.
+        """
         consulta = texto.strip()
         if not consulta or limite <= 0:
             return []
+        fin = time.monotonic() + self._timeout
         datos = self._json(self._llamar("mem_search", {
             "query": consulta,
             "limit": min(limite, LIMITE_BUSQUEDA),
             "match_mode": "any",
             "response_format": "compact",
-        }, si_no_hay_proyecto="{}"))
+        }, si_no_hay_proyecto="{}", fin=fin))
+        resultados = datos.get("results") or []
+        if not isinstance(resultados, list):
+            raise self._fallo(f"Respuesta inesperada de Engram: {str(resultados)[:200]}")
         recuerdos = []
-        for r in datos.get("results") or []:
+        for r in resultados:
+            id_ = _id_valido(r)
+            if id_ is None:
+                log.warning("Engram: skipping malformed search result: %.200r", r)
+                continue
             if r.get("project", PROYECTO) != PROYECTO:
                 continue
-            id_ = int(r["id"])
-            contenido = r.get("preview", "")
+            vista = r.get("preview")
+            contenido = vista if isinstance(vista, str) else None
             # Previews are cut at 300 characters; an older engram (1.x on PATH)
             # ignores response_format=compact and sends no preview at all.
-            if r.get("truncated") or "preview" not in r:
-                contenido = self._contenido_completo(id_, contenido)
-            recuerdos.append(Recuerdo(id_, r.get("title", ""), contenido))
+            if r.get("truncated") or contenido is None:
+                contenido = self._contenido_completo(id_, contenido, fin)
+            if contenido is None:
+                continue
+            titulo = r.get("title")
+            recuerdos.append(Recuerdo(id_, titulo if isinstance(titulo, str) else "", contenido))
         return recuerdos
 
     def guardar(self, titulo: str, contenido: str) -> int | None:
@@ -271,13 +340,15 @@ class MemoriaEngram:
             raise self._fallo(f"No se pudieron listar los recuerdos: {exc}") from exc
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             raise self._fallo(f"No se pudieron listar los recuerdos: {exc}") from exc
-        observaciones = (datos or {}).get("observations") or []
+        observaciones = (datos if isinstance(datos, dict) else {}).get("observations") or []
+        if not isinstance(observaciones, list):
+            raise self._fallo("No se pudieron listar los recuerdos: exportación inesperada")
         vivas = [
-            o for o in observaciones
-            if o.get("project") == PROYECTO and not o.get("deleted_at")
+            (_id_valido(o), o) for o in observaciones
+            if _id_valido(o) is not None and o.get("project") == PROYECTO and not o.get("deleted_at")
         ]
-        vivas.sort(key=lambda o: int(o["id"]), reverse=True)
-        return [Recuerdo(int(o["id"]), o.get("title", ""), o.get("content", "")) for o in vivas]
+        vivas.sort(key=lambda par: par[0], reverse=True)
+        return [Recuerdo(id_, o.get("title", ""), o.get("content", "")) for id_, o in vivas]
 
     def borrar(self, id_: int) -> None:
         """Delete a memory permanently."""
@@ -315,24 +386,37 @@ class MemoriaEngram:
         if self._fin.is_set():  # closed before the thread started
             self._listo.set()
             return
+        conectada = False
         try:
             async with self._conectar() as sesion:
                 self._sesion = sesion
+                conectada = True
                 self._listo.set()
                 await self._fin.wait()
+            if not self._cerrada and self._error is None:
+                self._fallar(_DETENIDA)  # the connection ended on its own
         except asyncio.CancelledError:
             pass
         except Exception as exc:  # any startup/transport failure
             while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
                 exc = exc.exceptions[0]  # anyio task groups wrap the real cause
             if not self._cerrada:
-                if self._sesion is None:
-                    self._fallar(f"No se pudo iniciar Engram: {exc}")
+                if conectada:
+                    self._fallar(f"{_DETENIDA}: {_describir(exc)}")
                 else:
-                    self._fallar(f"Engram se detuvo: {exc}")
+                    self._fallar(f"No se pudo iniciar Engram: {_describir(exc)}")
         finally:
             self._sesion = None
             self._listo.set()
+            # Calls still waiting on the dead session fail now, not at their timeout.
+            otras = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+            for tarea in otras:
+                tarea.cancel()
+            if otras:
+                try:
+                    await asyncio.wait(otras, timeout=1)
+                except asyncio.CancelledError:  # cerrar() meanwhile: just finish
+                    pass
 
     def _detener(self) -> None:
         self._fin.set()
@@ -345,6 +429,17 @@ class MemoriaEngram:
         self._error = mensaje
         log.warning("Long-term memory unavailable: %s", mensaje)
 
+    def _caer(self, mensaje: str) -> ErrorMemoria:
+        """The server is gone: become unavailable and end the connection."""
+        if not self._cerrada and self._sesion is not None:
+            self._sesion = None
+            self._fallar(mensaje)
+            try:
+                self._loop.call_soon_threadsafe(self._detener)
+            except RuntimeError:  # loop already finished
+                pass
+        return ErrorMemoria(self._error or mensaje)
+
     def _fallo(self, mensaje: str) -> ErrorMemoria:
         log.warning("Engram: %s", mensaje)
         return ErrorMemoria(mensaje)
@@ -354,31 +449,46 @@ class MemoriaEngram:
             raise ErrorMemoria(_CERRADA)
 
     def _llamar(
-        self, herramienta: str, argumentos: dict[str, Any], si_no_hay_proyecto: str | None = None
+        self,
+        herramienta: str,
+        argumentos: dict[str, Any],
+        si_no_hay_proyecto: str | None = None,
+        fin: float | None = None,
     ) -> str:
         """Call an MCP tool from any thread; return its text or raise ErrorMemoria.
 
         With ``si_no_hay_proyecto``, an "unknown project" error (no memories
-        saved yet) returns that text instead of raising.
+        saved yet) returns that text instead of raising. ``fin`` is the
+        ``time.monotonic()`` deadline (default: one client timeout from now).
         """
         self._comprobar()
-        limite = time.monotonic() + self._timeout
-        if not self._listo.wait(self._timeout):
+        limite = time.monotonic() + self._timeout if fin is None else fin
+        if not self._listo.wait(max(0.0, limite - time.monotonic())):
             raise self._fallo(_SIN_RESPUESTA)
         sesion = self._sesion
-        if sesion is None or self._loop is None:
+        loop = self._loop
+        if sesion is None or loop is None:
             self._comprobar()
             raise ErrorMemoria(self._error or _SIN_BINARIO)
         try:
-            futuro = asyncio.run_coroutine_threadsafe(sesion.call_tool(herramienta, argumentos), self._loop)
+            futuro = asyncio.run_coroutine_threadsafe(sesion.call_tool(herramienta, argumentos), loop)
         except RuntimeError as exc:  # loop closed meanwhile
-            raise self._fallo(f"Error al hablar con Engram: {exc}") from exc
+            self._comprobar()
+            raise self._fallo(self._error or f"Error al hablar con Engram: {exc}") from exc
         try:
             resultado = futuro.result(timeout=max(0.0, limite - time.monotonic()))
         except TimeoutError:
             futuro.cancel()
             raise self._fallo(_SIN_RESPUESTA) from None
+        except concurrent.futures.CancelledError:
+            # The connection ended (or the memory closed) while waiting.
+            self._comprobar()
+            raise self._fallo(self._error or _DETENIDA) from None
         except Exception as exc:
+            if _conexion_perdida(exc):
+                error = self._caer(f"{_DETENIDA}: {_describir(exc)}")
+                log.warning("Engram: %s", error)
+                raise error from exc
             raise self._fallo(f"Error al hablar con Engram: {exc}") from exc
         texto = "".join(
             c.text for c in getattr(resultado, "content", []) if getattr(c, "type", None) == "text"
@@ -398,11 +508,16 @@ class MemoriaEngram:
             raise self._fallo(f"Respuesta inesperada de Engram: {texto[:200]}")
         return datos
 
-    def _contenido_completo(self, id_: int, respaldo: str) -> str:
-        """Full content from mem_get_observation's text: header line, content, trailer."""
+    def _contenido_completo(self, id_: int, respaldo: str | None, fin: float) -> str | None:
+        """Full content from mem_get_observation's text: header line, content,
+        trailer. ``respaldo`` when the deadline ``fin`` is spent or it fails."""
+        if time.monotonic() >= fin:
+            return respaldo
         try:
-            texto = self._json(self._llamar("mem_get_observation", {"id": id_})).get("result", "")
+            texto = self._json(self._llamar("mem_get_observation", {"id": id_}, fin=fin)).get("result", "")
         except ErrorMemoria:
+            return respaldo
+        if not isinstance(texto, str):
             return respaldo
         _, _, resto = texto.partition("\n")
         fin = resto.rfind("\nSession: ")

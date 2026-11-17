@@ -302,7 +302,7 @@ def test_cargar_reports_whether_memory_works(caplog):
     with caplog.at_level(logging.WARNING):
         assert MemoriaUsuario(MemoriaFalsa(disponible=False)).cargar() is False
         rota = MemoriaFalsa(fallar="export roto")
-        assert MemoriaUsuario(rota).cargar() is True  # search and save still work
+        assert MemoriaUsuario(rota).cargar() is False  # the listing failed (retried later)
     assert "export roto" in caplog.text
 
 

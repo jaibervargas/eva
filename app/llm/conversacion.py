@@ -82,7 +82,10 @@ class MemoriaUsuario:
     "El usuario se llama Ana"), so the context is the search hits plus the
     user's other known facts from a cached list. The list is loaded once
     (``cargar``, in the background at startup) and kept up to date after each
-    save or delete, so no turn has to run ``engram export``.
+    save or delete, so no turn has to run ``engram export``. If that first
+    load fails (Engram slow to start, failed listing), the next ``contexto``
+    or ``aprender`` retries it while memory is available, at most once per
+    turn.
 
     Every method may be called from any thread. Only ``listar`` and ``borrar``
     (used by the memories dialog) raise ``ErrorMemoria``; the rest log memory
@@ -97,24 +100,54 @@ class MemoriaUsuario:
         # cannot drop a new fact or bring back a deleted one.
         self._version = 0
         self._cambios: list[tuple[int, Recuerdo | None, int]] = []  # (version, saved, deleted id)
+        self._cargada = False  # the cache holds a successful listing
+        self._cargando = threading.Lock()  # one listing at a time
+        self._turno = 0  # counts contexto() calls (one per chat turn)
+        self._turno_reintento = -1  # turn of the last load retry
 
     @property
     def disponible(self) -> bool:
         return bool(self.memoria.disponible)
 
     def cargar(self) -> bool:
-        """Wait for Engram and load the known facts; return ``disponible``."""
+        """Wait for Engram and load the known facts; return whether they loaded."""
         try:
             if not self.memoria.esperar():
                 log.warning("Long-term memory unavailable: %s", self.memoria.error)
                 return False
+        except Exception:
+            log.exception("Unexpected error waiting for long-term memory")
+            return False
+        return self._recargar()
+
+    def _recargar(self) -> bool:
+        """List every fact into the cache; True on success. Never raises."""
+        if not self._cargando.acquire(blocking=False):
+            return False  # another thread is already listing
+        try:
             inicio = self._version_actual()
             self._fijar(self.memoria.listar(), inicio)
+            return True
         except ErrorMemoria as exc:
             log.warning("Could not load the memories: %s", exc)
         except Exception:
             log.exception("Unexpected error loading the memories")
-        return self.disponible
+        finally:
+            self._cargando.release()
+        return False
+
+    def _reintentar_carga(self, turno: int) -> None:
+        """Retry a failed load once for ``turno`` if memory is available now."""
+        with self._candado:
+            if self._cargada or self._turno_reintento == turno:
+                return
+        if not self.disponible:
+            return
+        with self._candado:
+            if self._cargada or self._turno_reintento == turno:
+                return
+            self._turno_reintento = turno
+        self._recargar()
 
     def recuerdos(self) -> list[Recuerdo]:
         """The cached facts, newest first."""
@@ -123,13 +156,20 @@ class MemoriaUsuario:
 
     def contexto(self, pregunta: str) -> list[Recuerdo]:
         """Memories for answering ``pregunta``: search hits first, then the
-        other cached facts, without duplicates, at most ``LIMITE_RECUERDOS``."""
+        other cached facts, without duplicates, at most ``LIMITE_RECUERDOS``.
+        A search failure of any kind still returns the cached facts."""
+        with self._candado:
+            self._turno += 1
+            turno = self._turno
+        self._reintentar_carga(turno)
         encontrados: list[Recuerdo] = []
         if self.disponible:
             try:
-                encontrados = self.memoria.buscar(pregunta, LIMITE_RECUERDOS)
+                encontrados = list(self.memoria.buscar(pregunta, LIMITE_RECUERDOS))
             except ErrorMemoria as exc:
                 log.warning("Memory search failed: %s", exc)
+            except Exception:
+                log.exception("Unexpected error searching long-term memory")
         vistos: set[int] = set()
         elegidos: list[Recuerdo] = []
         for recuerdo in [*encontrados, *self.recuerdos()]:
@@ -146,6 +186,9 @@ class MemoriaUsuario:
         save them. Returns what was saved; never raises."""
         if not self.disponible:
             return []
+        with self._candado:
+            turno = self._turno
+        self._reintentar_carga(turno)  # at most once per turn, shared with contexto
         mensajes = [
             {"role": "system", "content": PROMPT_EXTRACCION},
             {"role": "user", "content": texto},
@@ -212,6 +255,7 @@ class MemoriaUsuario:
                 else:
                     cache = [r for r in cache if r.id != borrado]
             self._cache = cache
+            self._cargada = True
             self._cambios = [c for c in self._cambios if c[0] > inicio]
             return list(cache)
 

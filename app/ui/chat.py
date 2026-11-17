@@ -1,6 +1,7 @@
 """Main screen: conversation sidebar and chat with streamed answers."""
 
 import logging
+import threading
 
 import flet as ft
 
@@ -63,6 +64,12 @@ class PantallaChat:
         self.conversacion_id: int | None = None  # None: new, not yet saved
         # True while connecting or answering: send, new, open and settings wait.
         self.ocupado = False
+        # Guards ocupado and the extraction queue; notified when either changes.
+        self._estado = threading.Condition()
+        # User messages waiting for fact extraction, and whether an extractor runs.
+        self._por_aprender: list[str] = []
+        self._aprendiendo = False
+        self._cliente_aprender = None
         self._error_conexion: ft.Control | None = None  # at most one shown
 
         # Chat area
@@ -154,8 +161,34 @@ class PantallaChat:
         self._actualizar_nota_memoria()
         self.page.update()
 
+    def _encolar_aprendizaje(self, cliente, texto: str) -> None:
+        """Queue the user's message for fact extraction. At most one extractor
+        runs; messages queued meanwhile are coalesced into its next extraction."""
+        with self._estado:
+            self._por_aprender.append(texto)
+            self._cliente_aprender = cliente
+            if self._aprendiendo:
+                return
+            self._aprendiendo = True
+        # Its own thread: the screen is already free for the next question.
+        self.page.run_thread(self._aprender_en_cola)
+
+    def _aprender_en_cola(self) -> None:
+        """Extract queued messages, one extraction at a time, never starting
+        one while an answer is being streamed."""
+        while True:
+            with self._estado:
+                while self.ocupado:
+                    self._estado.wait()
+                if not self._por_aprender:
+                    self._aprendiendo = False
+                    return
+                textos, self._por_aprender = self._por_aprender, []
+                cliente = self._cliente_aprender
+            self._aprender(cliente, "\n".join(textos))
+
     def _aprender(self, cliente, texto: str) -> None:
-        """Save facts from the user's message (background, after the answer)."""
+        """Save facts from the user's message(s) (background, after the answer)."""
         try:
             self.memoria.aprender(cliente, texto)
         except Exception:  # aprender never raises; this is a last guard
@@ -170,7 +203,9 @@ class PantallaChat:
     # ----- model connection and settings -----
 
     def _ocupar(self, ocupado: bool) -> None:
-        self.ocupado = ocupado
+        with self._estado:
+            self.ocupado = ocupado
+            self._estado.notify_all()
         self.boton.disabled = ocupado
 
     def _conectar_en_segundo_plano(self, texto: str | None = None) -> None:
@@ -329,5 +364,4 @@ class PantallaChat:
             self._actualizar_nota_memoria()
             self.page.update()
         if aprender:
-            # Its own thread: the screen is already free for the next question.
-            self.page.run_thread(self._aprender, cliente, texto)
+            self._encolar_aprendizaje(cliente, texto)
