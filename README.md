@@ -54,6 +54,8 @@ eva/
 │   ├── config.py          # Lee y guarda config.json
 │   ├── auth.py            # Inicio de sesión con OpenRouter (OAuth con PKCE)
 │   ├── secretos.py        # Claves de API en el almacén seguro del sistema (keyring)
+│   ├── auth_chatgpt.py    # Inicio de sesión con ChatGPT (registro automático, PKCE)
+│   ├── cuentas_chatgpt.py # Cuentas de ChatGPT en un archivo cifrado (clave en keyring)
 │   ├── setup_inicial.py   # Revisa Ollama y descarga modelos al primer inicio
 │   ├── ui/
 │   │   ├── chat.py        # Pantalla de chat
@@ -63,7 +65,9 @@ eva/
 │   ├── llm/
 │   │   ├── base.py        # Interfaz común para cualquier modelo
 │   │   ├── local_client.py    # Ollama y LM Studio
-│   │   └── cloud_client.py    # OpenAI, Claude, Gemini y OpenRouter
+│   │   ├── cloud_client.py    # OpenAI, Claude, Gemini y OpenRouter
+│   │   ├── chatgpt_client.py  # Tu plan de ChatGPT con la Responses API
+│   │   └── sesion_chatgpt.py  # Renueva y cierra la sesión de ChatGPT
 │   ├── voice/
 │   │   ├── stt.py         # Voz a texto (faster-whisper)
 │   │   └── tts.py         # Texto a voz (Piper)
@@ -103,9 +107,9 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 | 7 — Docker, opcional | 12 | `docker compose up` para servidores |
 | 8 — Pruebas, documentación y lanzamiento | 13–14 | Pruebas con pytest, README, pruebas con usuarios, versión 1.0 publicada |
 
-**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Con el bloque 2C, Eva también usa OpenAI, Claude, Gemini u OpenRouter con tu clave de API (guardada en el almacén seguro del sistema) o iniciando sesión con OpenRouter, y usa la nube como respaldo al extraer recuerdos.
+**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Con el bloque 2C, Eva también usa OpenAI, Claude, Gemini u OpenRouter con tu clave de API (guardada en el almacén seguro del sistema) o iniciando sesión con OpenRouter, y usa la nube como respaldo al extraer recuerdos. El bloque 2D ("Iniciar sesión con ChatGPT" con varias cuentas) está implementado y revisado; falta la prueba real con una cuenta Plus/Pro.
 
-**Siguiente paso concreto:** bloque 2D ("Iniciar sesión con ChatGPT" para usar el plan Plus/Pro).
+**Siguiente paso concreto:** prueba real del bloque 2D ("Iniciar sesión con ChatGPT", ya implementado) con una cuenta Plus/Pro; después, la Fase 3 (voz a texto).
 
 ## Instalación y ejecución
 
@@ -191,8 +195,18 @@ que la abras tú y sigue esperando, así el inicio de sesión se completa igual)
 (Administrador de credenciales en Windows, Llavero en Mac), **nunca** en
 `config.json`; si ya hay una guardada, el campo dice "Clave guardada" y
 **Borrar clave** la elimina. No se usan las suscripciones Claude Pro/Max ni Google
-AI Pro, porque sus términos no lo permiten en apps de terceros. El inicio de
-sesión con ChatGPT llegará en el bloque 2D.
+AI Pro, porque sus términos no lo permiten en apps de terceros.
+
+Con **ChatGPT** usas tu plan Plus o Pro, sin clave de API. En Ajustes elige el
+proveedor ChatGPT, la cuenta ("Agregar cuenta…" la primera vez) y pulsa
+**Continuar con ChatGPT**: se abre el navegador, entras con tu cuenta y autorizas
+a Eva. Puedes guardar varias cuentas y elegir cuál usar; **Cerrar sesión** la
+desconecta de Eva (y avisa si no pudo confirmarlo con OpenAI). Si la cuenta entró
+pero no autorizó usar el plan, aparece **Permitir usar mi plan**. Los tokens se
+guardan en un archivo cifrado en la carpeta de Eva, con la clave de cifrado en el
+almacén seguro del sistema, y la sesión se renueva sola. El uso del plan se revisa
+en chatgpt.com/settings/usage (en Plus, el límite de cinco horas se comparte con
+las demás apps que usan tu plan).
 
 ### 5. Memoria a largo plazo (Engram)
 
