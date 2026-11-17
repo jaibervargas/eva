@@ -342,11 +342,14 @@ def test_field_is_unlocked_when_reconnecting_fails(monkeypatch, tmp_path):
     pantalla.iniciar()
     page.correr_pendientes()
 
+    vistos = []
+    page.update = lambda *c: vistos.append((pantalla.campo.disabled, pantalla.boton.disabled))
     _enviar(pantalla, "hola")
     page.correr_pendientes()
 
     assert pantalla.campo.disabled is False
     assert pantalla.campo.value == "hola"  # kept to retry
+    assert vistos[-1] == (False, False)  # the unlock reaches the screen
 
 
 def test_reconnecting_before_sending_runs_off_the_ui_loop(monkeypatch, tmp_path):

@@ -1,6 +1,7 @@
 """Tests for the SQLite chat history."""
 
 import logging
+import os
 import sqlite3
 import stat
 import sys
@@ -134,6 +135,7 @@ def test_default_folder_is_made_private_on_every_startup(tmp_path, monkeypatch):
     llamadas = []
     esperada = _carpeta_por_defecto(tmp_path, monkeypatch)
     esperada.mkdir()  # left by an earlier version
+    os.chmod(esperada, 0o755)  # explicit: do not depend on the process umask
     monkeypatch.setattr("app.config.os.chmod", lambda ruta, modo: llamadas.append((ruta, modo)))
 
     carpeta_datos()
@@ -146,6 +148,8 @@ def test_chmod_failure_does_not_block_startup_and_is_logged(tmp_path, monkeypatc
         raise PermissionError("vfat")
 
     esperada = _carpeta_por_defecto(tmp_path, monkeypatch)
+    esperada.mkdir()
+    os.chmod(esperada, 0o755)  # explicit: do not depend on the process umask
     monkeypatch.setattr("app.config.os.chmod", rechazar)
 
     with caplog.at_level(logging.WARNING, logger="app.config"):
