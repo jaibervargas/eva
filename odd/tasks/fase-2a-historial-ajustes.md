@@ -22,4 +22,5 @@ Branch: `feat/fase-2a-historial-ajustes` (stacked on `feat/fase-1-chat-texto`). 
 - L1 (user): "listo ahora con que continuamos"
 - L2 (user): "listo procedan¿mos con eso" — accepts block 2A (history SQLite, sidebar, settings with config.json), recommended first. Branch question unanswered → stacked on Phase 1 branch.
 - L4: Evidence — 32 pytest tests pass; live LM Studio: a turn is saved to eva.db with its title; screen logic smoke (open saved chat → 2 bubbles + selected, new chat clears, settings lists 4 LM Studio models, Ollama offline shows error and disables Save, Save writes config.json); `python -m app.main` runs 20 s clean with DeprecationWarning as error.
+- L5: Independent verify (Risk item 6): S1-S3, S5 met; S4 blocker — non-string `proveedor` in config.json crashed startup (TypeError). Fixed with RED tests in d23663c (also empty answers no longer saved). 36 tests pass. Open advisories: config.json write errors not caught in settings dialog; repeated offline error bubbles; no automated UI tests.
 - L3: Decision — settings replace the EVA_MODELO / EVA_SERVIDOR env vars introduced in Phase 1 (unpublished branch); README updated accordingly.
