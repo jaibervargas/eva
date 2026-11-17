@@ -221,10 +221,10 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 ### Fase 2 — Memoria, Engram y ajustes (semanas 3 y 4)
 
 - [ ] Implementar `llm/cloud_client.py` (OpenAI, Claude y Gemini con clave de API), movido desde la Fase 1.
-- [ ] Crear la base SQLite con las tablas `conversaciones` y `mensajes`, guardada en la carpeta del usuario.
-- [ ] Guardar cada mensaje y enviar los últimos 20 al modelo como contexto.
-- [ ] Agregar en la barra lateral: nueva conversación y lista de conversaciones anteriores.
-- [ ] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`.
+- [x] Crear la base SQLite con las tablas `conversaciones` y `mensajes`, guardada en la carpeta del usuario.
+- [x] Guardar cada mensaje y enviar los últimos 20 al modelo como contexto.
+- [x] Agregar en la barra lateral: nueva conversación y lista de conversaciones anteriores.
+- [ ] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`. *(Parcial: ya elige LM Studio u Ollama y el modelo instalado, y guarda en `config.json`; faltan la nube y su forma de acceso (bloque 2C) y la voz (Fase 4).)*
 - [ ] Descargar el programa de Engram para Windows, Mac y Linux desde sus versiones publicadas en GitHub y guardarlo en `bin/`.
 - [ ] Implementar `memory/engram_client.py`: la app abre Engram en segundo plano y se conecta a él por MCP con la librería `mcp` de Python.
 - [ ] Antes de cada respuesta, buscar en Engram los recuerdos relacionados con la pregunta y agregarlos al contexto del modelo.
@@ -339,4 +339,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0 y 1 están completas con el modelo local (LM Studio). Sigue la Fase 2: guardar el historial en SQLite, la pantalla de ajustes con `config.json`, el cliente de la nube y la memoria a largo plazo con Engram.
+**Siguiente paso concreto:** las Fases 0 y 1 están completas con el modelo local (LM Studio). La Fase 2 se divide en tres bloques: 2A (historial en SQLite, barra lateral y ajustes locales) está hecho; sigue 2B (memoria a largo plazo con Engram) y luego 2C (cliente de la nube e inicio de sesión con `keyring`).

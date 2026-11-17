@@ -13,12 +13,13 @@ Branch: `feat/fase-2a-historial-ajustes` (stacked on `feat/fase-1-chat-texto`). 
 
 ## Tasks
 
-- T1 [S1,S2] `app/config.py` data folder + `app/memory/history.py` SQLite + `Conversacion` persisted with last-20 context, tests — inline — commit: pending
-- T2 [S4] `app/config.py` config.json load/save + settings dialog in `app/ui/ajustes.py` — inline — commit: pending
-- T3 [S3,S5] Sidebar (new conversation, previous conversations) wired in `app/ui/chat.py` / `app/main.py`, README + plan update — inline — commit: pending
+- T1 [S1,S2] `app/config.py` data folder + `app/memory/history.py` SQLite + `Conversacion` persisted with last-20 context, tests — inline — done, commit 91b622a
+- T2 [S4] `app/config.py` config.json load/save + `conectar()` + settings dialog in `app/ui/ajustes.py` — inline — done, commits e337456, dc6ff2b
+- T3 [S3,S5] Sidebar (new conversation, previous conversations) wired in `app/ui/chat.py` / `app/main.py` — done, commit dc6ff2b; README + plan update — see docs commit
 
 ## Log
 
 - L1 (user): "listo ahora con que continuamos"
 - L2 (user): "listo procedan¿mos con eso" — accepts block 2A (history SQLite, sidebar, settings with config.json), recommended first. Branch question unanswered → stacked on Phase 1 branch.
+- L4: Evidence — 32 pytest tests pass; live LM Studio: a turn is saved to eva.db with its title; screen logic smoke (open saved chat → 2 bubbles + selected, new chat clears, settings lists 4 LM Studio models, Ollama offline shows error and disables Save, Save writes config.json); `python -m app.main` runs 20 s clean with DeprecationWarning as error.
 - L3: Decision — settings replace the EVA_MODELO / EVA_SERVIDOR env vars introduced in Phase 1 (unpublished branch); README updated accordingly.
