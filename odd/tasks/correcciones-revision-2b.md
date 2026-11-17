@@ -1,0 +1,24 @@
+# Correcciones de la revisión 2B — latencia y resiliencia de la memoria
+
+Fix the non-blocking advisories of native review review-39efc8dfbb2d1813 (block 2B, Engram memory).
+Branch: `feat/fase-2b-engram`. Python 3.11, Flet 1.1.2, Windows (Git Bash). Tests: `venv/Scripts/python.exe -m pytest -q` (192 passed, 2 skipped at start).
+
+## Specs
+
+Each spec quotes the reviewer claim and states the required behaviour.
+
+- S1 [R3-001, R4-search-latency-unbounded] Claim: "buscar() can fetch full content for every truncated or preview-less hit. Each fetch is a separate _llamar call with its own fresh 10 s deadline, and the fetches run one after another ... the chat thread can be blocked for up to about 90 s before the model is even called." / "give contexto() one overall deadline for the search plus all observation fetches, or fall back to the preview when that deadline is spent." Required: `MemoriaEngram.buscar` has ONE overall deadline (the client timeout) covering the search and all full-content fetches; when the deadline is spent, remaining hits use their preview (or are dropped if they have none). Test: fake session where every fetch stalls → `buscar` returns within ~1 client timeout (assert elapsed < 1.5 × timeout with a small timeout) with preview content.
+- S2 [R3-002, R4-cache-load-no-retry] Claim: "cargar() gives up when esperar() times out ... and nothing retries it ... the S7 cross-conversation recall therefore silently fails for that session." / "retry the load lazily, for example in contexto() when the cache was never loaded successfully and memory is now available." Required: `MemoriaUsuario` remembers whether the cache was loaded successfully; if not, `contexto()` (and the next `aprender()`) retries `listar()` when memory is available, at most once per turn and without exceeding one client timeout; `cargar()` returns False when the listing failed. Tests: late connection → next `contexto("¿Cómo me llamo?")` includes the cached fact; failed startup listing → retried on the next turn.
+- S3 [R3-003] Claim: "If the engram process dies mid-session ... _sesion therefore stays set and `disponible` stays True. As a result, the S6 note 'Memoria a largo plazo no disponible' never appears." Required: when the MCP connection ends or a call fails because the server/process is gone (closed stream, process exit, connection error), `MemoriaEngram` marks itself unavailable (`disponible` False, `error` set) so the UI note appears and later calls fail fast with `ErrorMemoria` instead of waiting the timeout. Test with the real binary (skipped when missing, tmp ENGRAM_DATA_DIR): kill ONLY the engram process started by that client (by its PID) → `disponible` becomes False within a few seconds and the next call raises quickly. Plus a fake-based unit test.
+- S4 [R3-004] Claim: "int(r[\"id\"]) on an unexpected search result shape (a missing or non-numeric id) raises KeyError, TypeError or ValueError instead of ErrorMemoria." Required: malformed results are skipped (logged) and never raise anything but `ErrorMemoria`; `MemoriaUsuario.contexto` never loses the cached facts because of a search failure of any type. Test: search reply with items missing/with non-numeric id → valid items still returned; contexto still returns cached facts.
+- S5 [R4-extraction-contends-with-chat] Claim: "Every non-empty turn starts a full background LLM generation for fact extraction ... there is no single-flight or debounce ... Rapid turns stack several concurrent extraction threads." / "run at most one extraction at a time, coalescing pending messages, or skip extraction while a chat turn is in flight." Required: at most ONE extraction runs at a time; user messages that arrive while one is running are coalesced and processed together in the next single extraction after it finishes; extraction does not start while a chat answer is streaming (it waits until the screen is free). Tests: three quick turns → at most one extraction in flight at any moment and every user message is eventually covered; no extraction call overlaps a streaming answer.
+
+## Tasks
+
+- T1 [S1-S5] Implement test-first — route: gentle-ai-worker — commits: by parent after the worker returns.
+
+## Log
+
+- L1 (user): "corregir ahora"
+- L2: Source — advisories R3-001, R3-002, R3-003, R3-004, R4-cache-load-no-retry, R4-extraction-contends-with-chat, R4-search-latency-unbounded of review-39efc8dfbb2d1813 (approved; see odd/tasks/fase-2b-engram.md L8).
+- L3: Process safety — never kill all `engram.exe` processes (`taskkill /IM engram.exe` also kills the developer's own Engram server used by the IDE); only terminate processes you started, by PID.
