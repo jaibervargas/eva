@@ -108,28 +108,77 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 
 ## Instalación y ejecución
 
-```bash
+### 1. Preparar el entorno (solo la primera vez)
+
+```powershell
+cd C:\xampp\htdocs\eva
 py -3.11 -m venv venv
-venv\Scripts\activate          # Windows
+venv\Scripts\Activate.ps1
 pip install -r requirements.txt -r requirements-dev.txt
-python -m app.main             # abre la ventana de chat con Eva
-python -m pytest               # corre las pruebas (no necesita servidor de modelo)
 ```
+
+### 2. Prender el modelo local (LM Studio)
+
+Abre LM Studio y activa su servidor local (pestaña *Developer* → *Start Server*),
+o desde la terminal:
+
+```powershell
+lms server start
+curl http://localhost:1234/v1/models      # debe listar los modelos descargados
+```
+
+No hace falta cargar el modelo a mano: LM Studio lo carga con la primera pregunta.
+
+### 3. Correr la app
+
+PowerShell:
+
+```powershell
+cd C:\xampp\htdocs\eva
+venv\Scripts\Activate.ps1
+python -m app.main             # abre la ventana de chat con Eva
+```
+
+CMD (cambia solo la activación):
+
+```cmd
+venv\Scripts\activate.bat
+python -m app.main
+```
+
+Mac/Linux: `source venv/bin/activate` y luego `python -m app.main`.
+
+> Si PowerShell bloquea `Activate.ps1` con un error de "ejecución de scripts
+> deshabilitada", ejecuta una sola vez:
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
+**Qué deberías ver:** una ventana oscura con el campo de texto abajo. Tu mensaje
+aparece a la derecha en azul y la respuesta de Eva a la izquierda en gris: primero
+muestra "…" y luego se va escribiendo a medida que llega. Enter envía y
+Shift+Enter hace un salto de línea. Si LM Studio está apagado, aparece un
+mensaje en rojo explicándolo.
+
+### 4. Elegir otro modelo o servidor
 
 El chat se conecta a LM Studio en `http://localhost:1234/v1` y usa el primer
-modelo de chat que liste el servidor. Hasta que exista la pantalla de ajustes
-(Fase 2), ambos se pueden cambiar con variables de entorno:
+modelo de chat que liste el servidor (los modelos Qwen3 "piensan" unos segundos
+antes de contestar). Hasta que exista la pantalla de ajustes (Fase 2), ambos se
+pueden cambiar con variables de entorno antes de correr la app:
 
-```bash
-set EVA_MODELO=qwen/qwen3-1.7b                 # Windows (export en Mac/Linux)
-set EVA_SERVIDOR=http://localhost:11434/v1     # Ollama en lugar de LM Studio
+```powershell
+$env:EVA_MODELO = "google/gemma-4-12b-qat"           # PowerShell
+$env:EVA_SERVIDOR = "http://localhost:11434/v1"      # Ollama en lugar de LM Studio
+python -m app.main
 ```
 
-Para verificar el servidor de modelo local (LM Studio):
+En CMD: `set EVA_MODELO=google/gemma-4-12b-qat`. En Mac/Linux: `export EVA_MODELO=...`.
 
-```bash
-lms server start
-curl http://localhost:1234/v1/models
+### 5. Correr las pruebas
+
+No necesitan LM Studio: usan un servidor simulado.
+
+```powershell
+python -m pytest -q
 ```
 
 ## Formas de distribución
