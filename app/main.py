@@ -10,9 +10,11 @@ import os
 
 import flet as ft
 
+from app.config import carpeta_datos
 from app.llm.base import ErrorLLM
 from app.llm.conversacion import Conversacion
 from app.llm.local_client import LMSTUDIO_URL, ClienteLocal
+from app.memory.history import Historial
 from app.ui.chat import FONDO, PantallaChat
 
 
@@ -27,7 +29,7 @@ def crear_conversacion() -> tuple[Conversacion | None, str]:
         if not modelos:
             return None, "El servidor local no tiene modelos de chat. Descarga uno en LM Studio u Ollama."
         cliente.modelo = modelos[0]
-    return Conversacion(cliente), ""
+    return Conversacion(cliente, Historial(carpeta_datos() / "eva.db")), ""
 
 
 def main(page: ft.Page) -> None:
