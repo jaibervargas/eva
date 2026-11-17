@@ -10,6 +10,7 @@ from app.llm.local_client import ClienteLocal
 
 ROJO_ERROR = "#F87171"
 GRIS_TEXTO = "#9CA3AF"
+CONECTANDO = "Conectando…"
 
 
 class DialogoAjustes:
@@ -60,13 +61,26 @@ class DialogoAjustes:
         self._cargar_modelos()
 
     def _cargar_modelos(self) -> None:
-        """Fill the model list from the selected provider's server."""
-        url = PROVEEDORES[self.proveedor.value].url
+        """Fill the model list from the selected provider's server, off the UI loop."""
+        proveedor = self.proveedor.value
+        self.estado.value, self.estado.color = CONECTANDO, GRIS_TEXTO
+        self.boton_guardar.disabled = True
+        self.page.update()
+        self.page.run_thread(self._buscar_modelos, proveedor)
+
+    def _buscar_modelos(self, proveedor: str) -> None:
+        url = PROVEEDORES[proveedor].url
         try:
             modelos = ClienteLocal(modelo="", base_url=url).listar_modelos()
         except ErrorLLM as exc:
             modelos = []
-            self.estado.value, self.estado.color = str(exc), ROJO_ERROR
+            error = str(exc)
+        else:
+            error = None
+        if self.proveedor.value != proveedor:
+            return  # the user picked another provider meanwhile; its load wins
+        if error is not None:
+            self.estado.value, self.estado.color = error, ROJO_ERROR
         else:
             if modelos:
                 self.estado.value = f"{len(modelos)} modelos instalados en {url}"
@@ -81,6 +95,12 @@ class DialogoAjustes:
 
     def _guardar(self, e) -> None:
         nueva = Config(proveedor=self.proveedor.value, modelo=self.modelo.value or "", extras=self.config.extras)
-        guardar_config(nueva)
+        try:
+            guardar_config(nueva)
+        except OSError as exc:
+            self.estado.value = f"No pude guardar los ajustes: {exc}"
+            self.estado.color = ROJO_ERROR
+            self.page.update()
+            return
         self.page.pop_dialog()
         self.al_guardar(nueva)

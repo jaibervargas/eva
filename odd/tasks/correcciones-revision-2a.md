@@ -24,3 +24,4 @@ Each spec quotes the reviewer finding (claim text) and states the required behav
 
 - L1 (user): "AJUSTA LOS ERRORES ENCONTRADOS"
 - L2: Source — advisory findings R1-001, R3-blocking-network-on-ui-loop, R3-repeated-offline-error-bubbles, R3-settings-save-oserror, R3-stream-transport-errors-unwrapped, R3-turn-save-not-atomic, R3-ui-logic-untested, R3-ui-only-catches-errorllm, R4-001, R4-002, R4-003 from review-9bf4a9f538885368 (approved; advisories are separate later work).
+- L3 (T1, worker): S1-S8 implemented test-first; suite 60 passed, 1 skipped (POSIX-only mode test on Windows). Commits left to the parent (worker contract forbids staging/committing). Note: Flet 1.1.2 controls compare equal by value, so the connection-error bubble is removed by identity.

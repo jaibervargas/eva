@@ -166,7 +166,9 @@ Las conversaciones se guardan solas y siguen ahí al cerrar y volver a abrir la 
 ### 4. Elegir el proveedor y el modelo
 
 Abajo en la barra lateral se ve el modelo en uso (por ejemplo
-`LM Studio · qwen/qwen3-1.7b`). El botón de engranaje abre **Ajustes**, donde se
+`LM Studio · qwen/qwen3-1.7b`; mientras busca el servidor dice `Conectando…`, y
+si no lo encuentra muestra un solo aviso en rojo que desaparece al conectarse).
+El botón de engranaje abre **Ajustes**, donde se
 elige el proveedor (LM Studio u Ollama) y uno de los modelos instalados en él. Al
 guardar, el cambio se aplica enseguida. La primera vez se usa LM Studio con el
 primer modelo de chat que liste (los modelos Qwen3 "piensan" unos segundos antes
@@ -181,7 +183,8 @@ de contestar).
 | Linux | `~/.local/share/eva` |
 
 Ahí están `eva.db` (el historial del chat, en SQLite) y `config.json` (los
-ajustes). Para usar otra carpeta, define la variable `EVA_DATA_DIR` antes de
+ajustes). En Mac y Linux la carpeta queda con permisos `700`: solo tu usuario
+puede leer tus conversaciones. Para usar otra carpeta, define la variable `EVA_DATA_DIR` antes de
 correr la app; por ejemplo, en PowerShell: `$env:EVA_DATA_DIR = "C:\pruebas\eva"`.
 
 ### 5. Correr las pruebas

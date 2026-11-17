@@ -1,5 +1,7 @@
 """Main screen: conversation sidebar and chat with streamed answers."""
 
+import logging
+
 import flet as ft
 
 from app.config import PROVEEDORES, Config
@@ -19,6 +21,9 @@ ROJO_ERROR = "#F87171"
 RADIO = 12
 ANCHO_LATERAL = 260
 PENSANDO = "…"
+CONECTANDO = "Conectando…"
+
+log = logging.getLogger(__name__)
 
 
 def _burbuja(texto: ft.Text, de_usuario: bool) -> ft.Control:
@@ -46,7 +51,9 @@ class PantallaChat:
         self.config = config
         self.cliente: ClienteLocal | None = None
         self.conversacion_id: int | None = None  # None: new, not yet saved
+        # True while connecting or answering: send, new, open and settings wait.
         self.ocupado = False
+        self._error_conexion: ft.Control | None = None  # at most one shown
 
         # Chat area
         self.mensajes = ft.ListView(expand=True, spacing=10, padding=16, auto_scroll=True)
@@ -102,23 +109,48 @@ class PantallaChat:
         return ft.Row([lateral, chat], expand=True, spacing=0)
 
     def iniciar(self) -> None:
-        """Connect to the model server and show the saved conversations."""
-        self._conectar()
+        """Show the saved conversations and connect to the model server."""
         self._refrescar_lista()
-        self.page.update()
+        self._conectar_en_segundo_plano()
 
     # ----- model connection and settings -----
+
+    def _ocupar(self, ocupado: bool) -> None:
+        self.ocupado = ocupado
+        self.boton.disabled = ocupado
+
+    def _conectar_en_segundo_plano(self, texto: str | None = None) -> None:
+        """Connect off the UI loop (it may wait for the server); then send ``texto`` if given."""
+        self._ocupar(True)
+        self.etiqueta_modelo.value = CONECTANDO
+        self.page.update()
+        self.page.run_thread(self._conectar_y_enviar, texto)
+
+    def _conectar_y_enviar(self, texto: str | None) -> None:
+        self._conectar()  # never raises: failures become the connection-error bubble
+        if texto is not None and self.cliente is not None:
+            respuesta = self._empezar_turno(texto)
+            self._responder(texto, respuesta)  # releases the screen when done
+            return
+        self._ocupar(False)
+        self.page.update()
 
     def _conectar(self) -> None:
         proveedor = PROVEEDORES[self.config.proveedor].nombre
         try:
             self.cliente = conectar(self.config.servidor, self.config.modelo)
-        except ErrorLLM as exc:
+        except Exception as exc:
+            if isinstance(exc, ErrorLLM):
+                mensaje = str(exc)
+            else:
+                log.exception("Error inesperado al conectar con el modelo")
+                mensaje = f"Ocurrió un error inesperado: {exc}"
             self.cliente = None
             self.etiqueta_modelo.value = f"{proveedor} · sin conexión"
-            self._mostrar_error(str(exc))
+            self._mostrar_error_conexion(mensaje)
         else:
             self.etiqueta_modelo.value = f"{proveedor} · {self.cliente.modelo}"
+            self._quitar_error_conexion()
 
     def _abrir_ajustes(self) -> None:
         if not self.ocupado:
@@ -126,8 +158,7 @@ class PantallaChat:
 
     def _ajustes_guardados(self, config: Config) -> None:
         self.config = config
-        self._conectar()
-        self.page.update()
+        self._conectar_en_segundo_plano()
 
     # ----- conversations -----
 
@@ -148,6 +179,7 @@ class PantallaChat:
             return
         self.conversacion_id = None
         self.mensajes.controls.clear()
+        self._error_conexion = None
         self._refrescar_lista()
         self.page.update()
 
@@ -159,6 +191,7 @@ class PantallaChat:
             _burbuja(ft.Text(m["content"], color=TEXTO, selectable=True), de_usuario=m["role"] == "user")
             for m in self.historial.mensajes(conversacion_id)
         ]
+        self._error_conexion = None
         self._refrescar_lista()
         self.page.update()
 
@@ -167,29 +200,42 @@ class PantallaChat:
     def _agregar(self, texto: ft.Text, de_usuario: bool) -> None:
         self.mensajes.controls.append(_burbuja(texto, de_usuario))
 
-    def _mostrar_error(self, mensaje: str) -> None:
-        self._agregar(ft.Text(mensaje, color=ROJO_ERROR, selectable=True), de_usuario=False)
+    def _mostrar_error_conexion(self, mensaje: str) -> None:
+        """Show a connection error, replacing the previous one instead of piling up."""
+        self._quitar_error_conexion()
+        texto = ft.Text(mensaje, color=ROJO_ERROR, selectable=True)
+        self._agregar(texto, de_usuario=False)
+        self._error_conexion = self.mensajes.controls[-1]
+
+    def _quitar_error_conexion(self) -> None:
+        if self._error_conexion is not None:
+            # By identity: Flet controls compare equal by value.
+            self.mensajes.controls = [c for c in self.mensajes.controls if c is not self._error_conexion]
+        self._error_conexion = None
 
     async def _enviar(self, e) -> None:
         texto = (self.campo.value or "").strip()
         if not texto or self.ocupado:
             return
         if self.cliente is None:
-            # The server may have been started after the app opened.
-            self._conectar()
-            if self.cliente is None:
-                self.page.update()
-                return
-        self.ocupado = True
+            # The server may have been started after the app opened; the
+            # question stays in the field until the connection succeeds.
+            self._conectar_en_segundo_plano(texto)
+            return
+        self._ocupar(True)
+        respuesta = self._empezar_turno(texto)
+        await self.campo.focus()
+        # Streaming blocks while waiting for the model, so it runs off the UI loop.
+        self.page.run_thread(self._responder, texto, respuesta)
+
+    def _empezar_turno(self, texto: str) -> ft.Text:
+        """Show the question and an answer bubble that will fill as Eva answers."""
         self.campo.value = ""
-        self.boton.disabled = True
         self._agregar(ft.Text(texto, color=TEXTO, selectable=True), de_usuario=True)
         respuesta = ft.Text(PENSANDO, color=TEXTO, selectable=True)
         self._agregar(respuesta, de_usuario=False)
         self.page.update()
-        await self.campo.focus()
-        # Streaming blocks while waiting for the model, so it runs off the UI loop.
-        self.page.run_thread(self._responder, texto, respuesta)
+        return respuesta
 
     def _responder(self, texto: str, respuesta: ft.Text) -> None:
         conversacion = Conversacion(self.cliente, self.historial, self.conversacion_id)
@@ -205,8 +251,12 @@ class PantallaChat:
         except ErrorLLM as exc:
             respuesta.value = str(exc)
             respuesta.color = ROJO_ERROR
+        except Exception as exc:
+            # Any other failure (e.g. the history database) must still reach the user.
+            log.exception("Error inesperado al responder")
+            respuesta.value = f"Ocurrió un error inesperado: {exc}"
+            respuesta.color = ROJO_ERROR
         finally:
-            self.ocupado = False
-            self.boton.disabled = False
+            self._ocupar(False)
             self._refrescar_lista()
             self.page.update()
