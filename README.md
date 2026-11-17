@@ -52,7 +52,8 @@ eva/
 ├── app/
 │   ├── main.py            # Interfaz Flet (punto de entrada)
 │   ├── config.py          # Lee y guarda config.json
-│   ├── auth.py            # Inicio de sesión con ChatGPT y claves guardadas de forma segura
+│   ├── auth.py            # Inicio de sesión con OpenRouter (OAuth con PKCE)
+│   ├── secretos.py        # Claves de API en el almacén seguro del sistema (keyring)
 │   ├── setup_inicial.py   # Revisa Ollama y descarga modelos al primer inicio
 │   ├── ui/
 │   │   ├── chat.py        # Pantalla de chat
@@ -62,7 +63,7 @@ eva/
 │   ├── llm/
 │   │   ├── base.py        # Interfaz común para cualquier modelo
 │   │   ├── local_client.py    # Ollama y LM Studio
-│   │   └── cloud_client.py
+│   │   └── cloud_client.py    # OpenAI, Claude, Gemini y OpenRouter
 │   ├── voice/
 │   │   ├── stt.py         # Voz a texto (faster-whisper)
 │   │   └── tts.py         # Texto a voz (Piper)
@@ -102,9 +103,9 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 | 7 — Docker, opcional | 12 | `docker compose up` para servidores |
 | 8 — Pruebas, documentación y lanzamiento | 13–14 | Pruebas con pytest, README, pruebas con usuarios, versión 1.0 publicada |
 
-**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Falta, para el bloque 2C, usar el modelo de la nube como respaldo al extraer recuerdos.
+**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Con el bloque 2C, Eva también usa OpenAI, Claude, Gemini u OpenRouter con tu clave de API (guardada en el almacén seguro del sistema) o iniciando sesión con OpenRouter, y usa la nube como respaldo al extraer recuerdos.
 
-**Siguiente paso concreto:** bloque 2C (cliente de la nube e inicio de sesión).
+**Siguiente paso concreto:** bloque 2D ("Iniciar sesión con ChatGPT" para usar el plan Plus/Pro).
 
 ## Instalación y ejecución
 
@@ -176,10 +177,21 @@ Abajo en la barra lateral se ve el modelo en uso (por ejemplo
 `LM Studio · qwen/qwen3-1.7b`; mientras busca el servidor dice `Conectando…`, y
 si no lo encuentra muestra un solo aviso en rojo que desaparece al conectarse).
 El botón de engranaje abre **Ajustes**, donde se
-elige el proveedor (LM Studio u Ollama) y uno de los modelos instalados en él. Al
-guardar, el cambio se aplica enseguida. La primera vez se usa LM Studio con el
-primer modelo de chat que liste (los modelos Qwen3 "piensan" unos segundos antes
-de contestar).
+elige el proveedor (LM Studio, Ollama, OpenAI, Claude, Gemini u OpenRouter) y uno
+de sus modelos. Al guardar, el cambio se aplica enseguida. La primera vez se usa
+LM Studio con el primer modelo de chat que liste (los modelos Qwen3 "piensan" unos
+segundos antes de contestar).
+
+Para un proveedor de la nube, escribe tu **clave de API** y pulsa Enter (o el botón
+de recargar) para ver sus modelos. Con OpenRouter también puedes pulsar
+**Iniciar sesión con OpenRouter**: se abre el navegador, entras con tu cuenta y
+Eva recibe una clave ligada a ella (el límite de gasto lo fijas tú en OpenRouter;
+un segundo clic cancela). Las claves se guardan en el almacén seguro del sistema
+(Administrador de credenciales en Windows, Llavero en Mac), **nunca** en
+`config.json`; si ya hay una guardada, el campo dice "Clave guardada" y
+**Borrar clave** la elimina. No se usan las suscripciones Claude Pro/Max ni Google
+AI Pro, porque sus términos no lo permiten en apps de terceros. El inicio de
+sesión con ChatGPT llegará en el bloque 2D.
 
 ### 5. Memoria a largo plazo (Engram)
 
@@ -200,8 +212,10 @@ Cómo funciona:
 - **Después de cada respuesta**, en segundo plano y sin demorar el chat, le pide
   al mismo modelo local que extraiga datos duraderos de tu mensaje (nombre,
   gustos, decisiones) y los guarda. Si un dato cambia (por ejemplo, tu nombre
-  completo), se actualiza en lugar de duplicarse. Por ahora solo se usa el
-  modelo local; el respaldo con un modelo de la nube llega con el bloque 2C.
+  completo), se actualiza en lugar de duplicarse. Si el modelo local falla o
+  su respuesta no se entiende, se reintenta **una vez** con el último modelo de
+  la nube que guardaste en Ajustes (si su clave está guardada); si el modelo
+  local contesta que no hay nada que guardar, no se usa la nube.
 - El botón **Recuerdos** de la barra lateral muestra lo que Eva recuerda de ti
   (título y contenido). Cada recuerdo tiene un botón para borrarlo: pide
   confirmación y lo borra para siempre.
