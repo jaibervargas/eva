@@ -130,9 +130,14 @@ class PantallaChat:
         self.page.run_thread(self._conectar_y_enviar, texto)
 
     def _conectar_y_enviar(self, texto: str | None) -> None:
-        self._conectar()  # never raises: failures become the connection-error bubble
-        if texto is not None:
-            self.campo.disabled = False  # only undo the lock this path set
+        try:
+            self._conectar()  # failures normally become the connection-error bubble
+        except Exception:
+            log.exception("Unexpected error while connecting")
+            self.cliente = None
+        finally:
+            if texto is not None:
+                self.campo.disabled = False  # only undo the lock this path set
         if texto is not None and self.cliente is not None:
             respuesta = self._empezar_turno(texto)
             self._responder(texto, respuesta)  # releases the screen when done

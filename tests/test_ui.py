@@ -334,6 +334,26 @@ def test_field_is_locked_while_connecting_before_sending(monkeypatch, tmp_path):
     assert pantalla.campo.disabled is False
 
 
+def test_field_is_unlocked_even_if_connecting_raises(monkeypatch, tmp_path):
+    server = Servidor(models=["m"], apagado=True)
+    _usar_servidor(monkeypatch, server)
+    page = FakePage(ejecutar=False)
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.iniciar()
+    page.correr_pendientes()
+
+    def romper():
+        raise RuntimeError("inesperado")
+
+    pantalla._conectar = romper
+    _enviar(pantalla, "hola")
+    page.correr_pendientes()
+
+    assert pantalla.campo.disabled is False
+    assert pantalla.ocupado is False
+    assert pantalla.campo.value == "hola"
+
+
 def test_field_is_unlocked_when_reconnecting_fails(monkeypatch, tmp_path):
     server = Servidor(models=["m"], apagado=True)
     _usar_servidor(monkeypatch, server)

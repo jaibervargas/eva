@@ -109,7 +109,11 @@ def test_data_folder_is_made_private_outside_windows(tmp_path, monkeypatch):
     monkeypatch.setattr("sys.platform", "linux")
     monkeypatch.setattr("app.config.os.chmod", lambda ruta, modo: llamadas.append((ruta, modo)))
 
-    carpeta = carpeta_datos()
+    anterior = os.umask(0o022)  # explicit: do not depend on the process umask
+    try:
+        carpeta = carpeta_datos()
+    finally:
+        os.umask(anterior)
     assert llamadas == [(carpeta, 0o700)]
 
 
@@ -161,6 +165,19 @@ def test_data_folder_permissions_are_unchanged_on_windows(tmp_path, monkeypatch)
     llamadas = []
     monkeypatch.setenv("EVA_DATA_DIR", str(tmp_path / "datos"))
     monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr("app.config.os.chmod", lambda ruta, modo: llamadas.append((ruta, modo)))
+
+    carpeta_datos()
+    assert llamadas == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_already_private_folder_is_not_chmodded_again(tmp_path, monkeypatch):
+    monkeypatch.delenv("EVA_DATA_DIR", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    (tmp_path / "eva").mkdir(mode=0o700)
+    os.chmod(tmp_path / "eva", 0o700)
+    llamadas = []
     monkeypatch.setattr("app.config.os.chmod", lambda ruta, modo: llamadas.append((ruta, modo)))
 
     carpeta_datos()
