@@ -104,13 +104,23 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 
 **Siguiente paso concreto:** completar la Fase 0 esta semana. Después, el siguiente bloque de código a escribir es `llm/base.py` y la primera pantalla de chat en Flet de la Fase 1.
 
-## Instalación y ejecución (Fase 0)
+## Instalación y ejecución
 
 ```bash
 py -3.11 -m venv venv
 venv\Scripts\activate          # Windows
-pip install -r requirements.txt
-python app/main.py             # abre la ventana de prueba "Hola mundo, soy Eva"
+pip install -r requirements.txt -r requirements-dev.txt
+python -m app.main             # abre la ventana de chat con Eva
+python -m pytest               # corre las pruebas (no necesita servidor de modelo)
+```
+
+El chat se conecta a LM Studio en `http://localhost:1234/v1` y usa el primer
+modelo de chat que liste el servidor. Hasta que exista la pantalla de ajustes
+(Fase 2), ambos se pueden cambiar con variables de entorno:
+
+```bash
+set EVA_MODELO=qwen/qwen3-1.7b                 # Windows (export en Mac/Linux)
+set EVA_SERVIDOR=http://localhost:11434/v1     # Ollama en lugar de LM Studio
 ```
 
 Para verificar el servidor de modelo local (LM Studio):
