@@ -24,7 +24,7 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 3) are verbatim; user decisions are q
 
 - T1 [S2, S4] `app/voice/stt.py` + tests + requirements — route: gentle-ai-worker (context backstop) — done (L5)
 - T2 [S1, S3] microphone button in the chat screen, recording, transcription and send flow, errors, tests — route: same worker — done (L5)
-- T3 [S5] docs, review, live test — pending
+- T3 [S5] docs, review, live test — docs done, live test passed (L8); review pending
 
 ## Log
 
@@ -35,3 +35,4 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 3) are verbatim; user decisions are q
 - L5 (T1+T2, worker evidence): RED T1 ModuleNotFoundError app.voice.stt; GREEN 13 tests (real-model test ran because small is on disk). RED T2 15 failed (PantallaChat has no transcriptor kwarg); GREEN 15. Full suite 699 passed, 3 skipped (parent re-ran). `app/ui/microfono.py` (Microfono, recorder created on first click), `PantallaChat.enviar_texto(texto, del_campo)`, main sets `app.voice` logger to INFO. Accepted deviations: public `Transcriptor.cargar()`; `local_files_only` when the model is on disk; start_recording False → "No pude grabar el audio: la grabación no empezó."; any load failure with files missing = download failure; `cancel_recording` attempted after recorder errors; a failed spoken send fills the field only if empty; the chat is marked busy while recording/transcribing.
 - L6 (live test, user): "le doy clic al microfono hablo , pero no aparece el transcribiendo , al momento de dad clic al boton rojo de parar el audio espera un momento y ahi si aparece mi mendaje , eva si me responde en el chat". Cause: the status bubble was added without `page.update()` before the off-loop transcription, so the window only refreshed after it was removed. Fix with RED test (`test_transcribing_is_on_screen_before_the_transcription_starts`); 700 passed, 3 skipped.
 - L7 (user): "no me aparece grabando mientras se captura el audio". Added the "Grabando… pulsa el botón rojo para terminar." bubble while recording (removed when stopping, also when stopping fails) with RED test; 702 passed, 3 skipped.
+- L8 (user, live test): "listo quedo bien" (Grabando…, Transcribiendo…, message sent and answered). README section "Hablarle a Eva" and plan Fase 3 checkboxes updated.

@@ -1,6 +1,6 @@
 # Plan de trabajo – Eva, el asistente de IA de IDEVA
 
-Nov 16, 2026 · @Esperanza · actualizado el Nov 18, 2026 (Fase 2 terminada y en `main`)
+Nov 16, 2026 · @Esperanza · actualizado el Nov 18, 2026 (Fase 3 terminada)
 
 ## 1. Resumen y objetivos
 
@@ -243,12 +243,12 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 3 — Escuchar: voz a texto (semana 5)
 
-- [ ] Agregar el botón de micrófono con el grabador de audio de Flet (`AudioRecorder`).
-- [ ] Implementar `voice/stt.py` con faster-whisper (modelo `small`, idioma español).
-- [ ] Mostrar el texto transcrito y enviarlo al chat.
-- [ ] Medir el tiempo de transcripción; si pasa de 5 segundos, probar el modelo `base`.
+- [x] Agregar el botón de micrófono con el grabador de audio de Flet (`AudioRecorder`). *(Paquete `flet-audio-recorder`; un clic para empezar y otro para terminar, con los avisos "Grabando…" y "Transcribiendo…". El botón se bloquea mientras procesa: en Windows, empezar una grabación con otra en curso hace fallar el grabador.)*
+- [x] Implementar `voice/stt.py` con faster-whisper (modelo `small`, idioma español). *(Corre en la CPU sin internet; el modelo se descarga solo la primera vez a `modelos/whisper/` en la carpeta de Eva. La descarga con barra de progreso queda para `setup_inicial.py` en la Fase 5.)*
+- [x] Mostrar el texto transcrito y enviarlo al chat. *(Se envía de una vez, por el mismo camino que un mensaje escrito; si no se entendió nada, avisa y no envía.)*
+- [x] Medir el tiempo de transcripción; si pasa de 5 segundos, probar el modelo `base`. *(Medido: `small` tarda 3,3–3,5 s por frase y transcribe bien; `base` tarda 1,1 s pero se equivoca más. Se queda `small`; cada transcripción registra su tiempo.)*
 
-**Entregable:** el usuario habla y su pregunta aparece escrita y respondida.
+**Entregable:** el usuario habla y su pregunta aparece escrita y respondida. **Estado: completa y probada en la app (702 pruebas con pytest).**
 
 ### Fase 4 — Hablar: texto a voz (semana 6)
 
@@ -263,7 +263,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 - [ ] Aplicar la guía visual de la sección 6 (tema oscuro de Flet y colores).
 - [ ] Agregar los indicadores de estado (escuchando, pensando, hablando).
-- [ ] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Parcial, adelantado en el bloque 2A: LM Studio u Ollama apagado o que se corta a mitad de respuesta, errores inesperados, ajustes que no se pueden guardar y conexión en segundo plano sin congelar la ventana. Pendiente de la revisión: si la conexión falla de forma inesperada, la etiqueta queda en "Conectando…" sin burbuja de error. Adelantado en los bloques 2C y 2D: clave de API inválida, sin conexión o demora del proveedor de la nube, límite de uso o falta de saldo, sesión de ChatGPT vencida y plan de ChatGPT no autorizado. Falta: sin micrófono (Fase 3).)*
+- [ ] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Parcial, adelantado en el bloque 2A: LM Studio u Ollama apagado o que se corta a mitad de respuesta, errores inesperados, ajustes que no se pueden guardar y conexión en segundo plano sin congelar la ventana. Pendiente de la revisión: si la conexión falla de forma inesperada, la etiqueta queda en "Conectando…" sin burbuja de error. Adelantado en los bloques 2C y 2D: clave de API inválida, sin conexión o demora del proveedor de la nube, límite de uso o falta de saldo, sesión de ChatGPT vencida y plan de ChatGPT no autorizado. Adelantado en la Fase 3: sin permiso de micrófono, sin micrófono conectado, fallo del grabador, fallo al descargar el modelo de voz y audio que no se entendió.)*
 - [ ] Escribir `setup_inicial.py`: detectar si Ollama o LM Studio están abiertos y descargar los modelos de voz al primer inicio, con barra de progreso.
 
 **Entregable:** versión beta lista para que otra persona la pruebe desde el código.
@@ -300,7 +300,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 8 — Pruebas, documentación y lanzamiento (semanas 13 y 14)
 
-- [ ] Escribir pruebas con pytest para memoria, STT, TTS y clientes de IA. *(Parcial: 671 pruebas cubren memoria (SQLite y Engram), clientes local, de la nube y de ChatGPT, inicio de sesión, almacenamiento seguro de claves y tokens, configuración y pantallas; faltan STT y TTS. Pendiente: fijar la plataforma en dos pruebas de permisos para que en Mac no toquen la carpeta real del usuario.)*
+- [ ] Escribir pruebas con pytest para memoria, STT, TTS y clientes de IA. *(Parcial: 671 pruebas cubren memoria (SQLite y Engram), clientes local, de la nube y de ChatGPT, inicio de sesión, almacenamiento seguro de claves y tokens, configuración y pantallas; incluye STT con un grabador y un modelo simulados más una prueba con el modelo real; falta TTS. Pendiente: fijar la plataforma en dos pruebas de permisos para que en Mac no toquen la carpeta real del usuario.)*
 - [ ] Escribir el `README.md`: requisitos, instalación, uso, problemas frecuentes y cómo saltar la advertencia de seguridad en Mac y Windows.
 - [ ] Pedir a 2 o 3 personas que lo instalen y anotar sus problemas.
 - [ ] Corregir lo encontrado y publicar la versión 1.0 con sus instaladores en GitHub Releases.
@@ -345,4 +345,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0, 1 y 2 están completas: Eva chatea con modelos locales (LM Studio u Ollama), con OpenAI, Claude, Gemini u OpenRouter (clave de API o cuenta) y con el plan de ChatGPT (varias cuentas), recuerda conversaciones y datos del usuario con Engram, y guarda claves y tokens de forma segura. Sigue la Fase 3 (voz a texto).
+**Siguiente paso concreto:** las Fases 0, 1, 2 y 3 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura y entiende lo que se le dice por micrófono. Sigue la Fase 4 (texto a voz con Piper).
