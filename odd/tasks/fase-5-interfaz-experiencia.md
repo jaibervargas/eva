@@ -22,7 +22,7 @@ Branch: `feat/fase-5-interfaz-experiencia` (based on the Phase 4 branch until PR
 - T2 [S3] error-state completion and regression coverage — done (L5; 796 passed, 3 skipped)
 - T3 [S4] setup_inicial.py detection/progress and tests — done (L6; 800 passed, 3 skipped)
 - T4 [S5] floating island behavior or bounded platform adapter, tests and docs — done (L7; 803 passed, 3 skipped)
-- T5 [S1-S5] docs, full verification, live test and review — done (L8; 803 passed, 3 skipped; native assess not-due)
+- T5 [S1-S5] docs, full verification, live test and review — done (L8-L10; 804 passed, 3 skipped; native assess not-due)
 
 ## Log
 
@@ -34,3 +34,5 @@ Branch: `feat/fase-5-interfaz-experiencia` (based on the Phase 4 branch until PR
 - L6 (T3 verification): Added `app/setup_inicial.py` with injectable server detection, Piper/Whisper preparation, progress callbacks and CLI entry point. Setup tests: 4 passed. Full suite: 800 passed, 3 skipped. T3 is verified; no real network or model download was used.
 - L7 (T4 verification): Added `app/ui/isla.py`, wired minimize/restore events in `app/main.py`, and added the compact 280×88 rounded always-on-top window with restore action. Focused checks: 64 passed. Full suite: 803 passed, 3 skipped. The adapter isolates Flet platform-specific window behavior.
 - L8 (T5 verification): Updated `docs/plan-de-trabajo.md`; native assess returned not-due (medium risk, under budget); full suite remained 803 passed, 3 skipped. User tested the maximized layout, responsive collapse, visible states, connection error handling and floating island in the Windows app and reported `listo`. Phase 5 is complete; Phase 5B is next.
+- L9 (live-test follow-up): The app log exposed a close race where background memory refresh tried to update a destroyed Flet session. The UI now ignores only that expected shutdown RuntimeError and keeps logging other refresh errors.
+- L10 (verification): Added a regression test for the destroyed-session race. Full suite: 804 passed, 3 skipped.

@@ -309,7 +309,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Los errores existentes se mantienen y una excepción inesperada al conectar ahora muestra "Sin conexión", una explicación accionable y conserva el texto para reintentar.)*
 - [x] Escribir `setup_inicial.py`: detectar si Ollama o LM Studio están abiertos y descargar los modelos de voz al primer inicio, con barra de progreso. *(Preparación inyectable de Piper y Whisper, progreso visible y CLI `python -m app.setup_inicial`; las pruebas no usan red ni descargas reales.)*
 
-**Entregable:** versión beta lista para que otra persona la pruebe desde el código. **Estado: completa, probada en Windows con la ventana completa, layout responsive, estados, errores y la isla flotante (803 pruebas con pytest; 3 omitidas).**
+**Entregable:** versión beta lista para que otra persona la pruebe desde el código. **Estado: completa, probada en Windows con la ventana completa, layout responsive, estados, errores y la isla flotante (804 pruebas con pytest; 3 omitidas).**
 
 ### Fase 5B — Eva animada y con voz (semanas 8 y 9)
 

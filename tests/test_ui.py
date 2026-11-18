@@ -611,6 +611,19 @@ def test_eva_remembers_the_user_in_a_new_conversation_from_the_screen(monkeypatc
     ]
 
 
+def test_memory_refresh_after_window_close_is_ignored(monkeypatch, tmp_path, caplog):
+    pantalla, _ = _con_memoria(monkeypatch, tmp_path, MemoriaFalsa())
+
+    def ventana_cerrada(*controles):
+        raise RuntimeError("An attempt to fetch destroyed session.")
+
+    pantalla.page.update = ventana_cerrada
+    with caplog.at_level(logging.ERROR):
+        pantalla._aprender(LLMGuion(respuesta="", extraccion=""), "dato")
+
+    assert "destroyed session" not in caplog.text
+
+
 def test_memory_that_stops_working_keeps_the_chat_and_shows_the_note(monkeypatch, tmp_path, caplog):
     falsa = MemoriaFalsa()
     pantalla, _ = _con_memoria(monkeypatch, tmp_path, falsa)

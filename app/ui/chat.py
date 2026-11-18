@@ -300,6 +300,9 @@ class PantallaChat:
         try:
             self._actualizar_nota_memoria()
             self.page.update()
+        except RuntimeError as exc:  # the background extractor may outlive the Flet window
+            if "destroyed session" not in str(exc).lower():
+                log.exception("Could not refresh the screen after learning")
         except Exception:  # e.g. the window is closing: keep the extractor alive
             log.exception("Could not refresh the screen after learning")
 
