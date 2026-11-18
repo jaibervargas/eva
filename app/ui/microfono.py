@@ -117,6 +117,7 @@ class Microfono:
         # The stop icon shows at once, locked until recording really starts.
         self._mostrar_detener(True)
         self._ocupar()
+        await self._callar_a_eva()
         ruta = str(Path(tempfile.gettempdir()) / f"eva-voz-{uuid.uuid4().hex}.wav")
         error = None
         try:
@@ -141,6 +142,16 @@ class Microfono:
         self._aviso_grabando = self.pantalla.mostrar_aviso(GRABANDO)
         self.actualizar()
         self.pantalla.page.update()
+
+    async def _callar_a_eva(self) -> None:
+        """Eva stops reading aloud while the user speaks."""
+        voz = getattr(self.pantalla, "voz", None)
+        if voz is None:
+            return
+        try:
+            await voz.callar()
+        except Exception:  # never block the recording because of the player
+            log.exception("Could not stop Eva's voice")
 
     async def _cancelar(self) -> None:
         with contextlib.suppress(Exception):
@@ -173,7 +184,7 @@ class Microfono:
             error = NO_TE_ENTENDI
         self._terminar(error)
         if error is None:
-            await self.pantalla.enviar_texto(texto)
+            await self.pantalla.enviar_texto(texto, por_voz=True)
 
     async def _transcribir(self, audio: str) -> tuple[str, str | None]:
         """(text, None) or ("", error message); the model runs off the UI loop."""

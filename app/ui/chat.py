@@ -16,7 +16,11 @@ from app.memory.history import Historial
 from app.ui.ajustes import DialogoAjustes
 from app.ui.microfono import Microfono
 from app.ui.recuerdos import DialogoRecuerdos
-from app.voice.stt import Transcriptor
+from app.ui.reproductor import ESCUCHAR, NO_PUDE_LEER, VozEva, modo_valido
+from app.voice.stt import ErrorVoz, Transcriptor
+from app.voice.tts import DESCARGANDO as DESCARGANDO_VOZ
+from app.voice.tts import MENSAJE_SIN_DESCARGA as SIN_DESCARGA_VOZ
+from app.voice.tts import voz_valida
 
 FONDO = "#0F1117"
 FONDO_LATERAL = "#161A23"
@@ -34,8 +38,9 @@ SIN_MEMORIA = "Memoria a largo plazo no disponible"
 log = logging.getLogger(__name__)
 
 
-def _burbuja(texto: ft.Text, de_usuario: bool) -> ft.Control:
-    """User bubbles on the right in blue, Eva's on the left in gray."""
+def _burbuja(texto: ft.Text, de_usuario: bool, boton: ft.Control | None = None) -> ft.Control:
+    """User bubbles on the right in blue, Eva's on the left in gray (with
+    ``boton`` beside it, e.g. "Escuchar")."""
     globo = ft.Container(
         content=texto,
         bgcolor=AZUL_USUARIO if de_usuario else GRIS_EVA,
@@ -45,7 +50,7 @@ def _burbuja(texto: ft.Text, de_usuario: bool) -> ft.Control:
     )
     return ft.Container(
         content=ft.Row(
-            [globo],
+            [globo] if boton is None else [globo, boton],
             alignment=ft.MainAxisAlignment.END if de_usuario else ft.MainAxisAlignment.START,
         ),
         padding=ft.Padding.only(left=60) if de_usuario else ft.Padding.only(right=60),
@@ -61,8 +66,12 @@ class PantallaChat:
         memoria: MemoriaUsuario | None = None,
         transcriptor: Transcriptor | None = None,
         grabador=None,
+        voz: VozEva | None = None,
     ) -> None:
         self.page = page
+        # Eva reads her answers aloud through the page's audio player; a page
+        # that cannot play audio (e.g. a test double) leaves her silent.
+        self.voz = voz if voz is not None else (VozEva(page) if isinstance(page, ft.Page) else None)
         self.historial = historial
         self.config = config
         # Long-term memory (Engram); None when it could not even be created.
@@ -240,7 +249,9 @@ class PantallaChat:
         self.boton.disabled = ocupado
         self.microfono.actualizar()
 
-    def _conectar_en_segundo_plano(self, texto: str | None = None, del_campo: bool = True) -> None:
+    def _conectar_en_segundo_plano(
+        self, texto: str | None = None, del_campo: bool = True, por_voz: bool = False
+    ) -> None:
         """Connect off the UI loop (it may wait for the server); then send ``texto`` if given."""
         self._ocupar(True)
         if texto is not None:
@@ -248,9 +259,9 @@ class PantallaChat:
             self.campo.disabled = True
         self.etiqueta_modelo.value = CONECTANDO
         self.page.update()
-        self.page.run_thread(self._conectar_y_enviar, texto, del_campo)
+        self.page.run_thread(self._conectar_y_enviar, texto, del_campo, por_voz)
 
-    def _conectar_y_enviar(self, texto: str | None, del_campo: bool = True) -> None:
+    def _conectar_y_enviar(self, texto: str | None, del_campo: bool = True, por_voz: bool = False) -> None:
         try:
             self._conectar()  # failures normally become the connection-error bubble
         except Exception:
@@ -264,7 +275,7 @@ class PantallaChat:
             self.campo.value = texto
         if texto is not None and self.cliente is not None:
             respuesta = self._empezar_turno(texto, del_campo)
-            self._responder(texto, respuesta)  # releases the screen when done
+            self._responder(texto, respuesta, por_voz)  # releases the screen when done
             return
         self._ocupar(False)
         self.page.update()
@@ -297,7 +308,7 @@ class PantallaChat:
 
     def _abrir_ajustes(self) -> None:
         if not self.ocupado:
-            DialogoAjustes(self.page, self.config, self._ajustes_guardados).abrir()
+            DialogoAjustes(self.page, self.config, self._ajustes_guardados, voz=self.voz).abrir()
 
     def _ajustes_guardados(self, config: Config) -> None:
         self.config = config
@@ -330,10 +341,11 @@ class PantallaChat:
         if self.ocupado:
             return
         self.conversacion_id = conversacion_id
-        self.mensajes.controls = [
-            _burbuja(ft.Text(m["content"], color=TEXTO, selectable=True), de_usuario=m["role"] == "user")
-            for m in self.historial.mensajes(conversacion_id)
-        ]
+        self.mensajes.controls = []
+        for m in self.historial.mensajes(conversacion_id):
+            texto = ft.Text(m["content"], color=TEXTO, selectable=True)
+            de_usuario = m["role"] == "user"
+            self.mensajes.controls.append(_burbuja(texto, de_usuario, None if de_usuario else self._boton_escuchar(texto)))
         self._error_conexion = None
         self._refrescar_lista()
         self.page.update()
@@ -373,21 +385,22 @@ class PantallaChat:
     async def _enviar(self, e) -> None:
         await self.enviar_texto((self.campo.value or "").strip(), del_campo=True)
 
-    async def enviar_texto(self, texto: str, del_campo: bool = False) -> None:
+    async def enviar_texto(self, texto: str, del_campo: bool = False, por_voz: bool = False) -> None:
         """Send a question. ``del_campo``: it is the field's text, cleared once shown
-        (a spoken question leaves whatever was typed in the field)."""
+        (a spoken question leaves whatever was typed in the field). ``por_voz``:
+        it came from the microphone (Eva may answer aloud)."""
         if not texto or self.ocupado:
             return
         if self.cliente is None:
             # The server may have been started after the app opened; the
             # question stays in the field until the connection succeeds.
-            self._conectar_en_segundo_plano(texto, del_campo)
+            self._conectar_en_segundo_plano(texto, del_campo, por_voz)
             return
         self._ocupar(True)
         respuesta = self._empezar_turno(texto, del_campo)
         await self.campo.focus()
         # Streaming blocks while waiting for the model, so it runs off the UI loop.
-        self.page.run_thread(self._responder, texto, respuesta)
+        self.page.run_thread(self._responder, texto, respuesta, por_voz)
 
     def _empezar_turno(self, texto: str, del_campo: bool = True) -> ft.Text:
         """Show the question and an answer bubble that will fill as Eva answers."""
@@ -399,7 +412,7 @@ class PantallaChat:
         self.page.update()
         return respuesta
 
-    def _responder(self, texto: str, respuesta: ft.Text) -> None:
+    def _responder(self, texto: str, respuesta: ft.Text, por_voz: bool = False) -> None:
         cliente = self.cliente
         conversacion = Conversacion(cliente, self.historial, self.conversacion_id, memoria=self.memoria)
         acumulado = ""
@@ -413,6 +426,8 @@ class PantallaChat:
                 respuesta.value = "(Eva no devolvió texto)"
             self.conversacion_id = conversacion.conversacion_id
             aprender = bool(acumulado) and self.memoria is not None
+            if acumulado:
+                self._agregar_escuchar(respuesta)
         except ErrorLLM as exc:
             respuesta.value = str(exc)
             respuesta.color = ROJO_ERROR
@@ -428,3 +443,64 @@ class PantallaChat:
             self.page.update()
         if aprender:
             self._encolar_aprendizaje(cliente, texto)
+        if acumulado and respuesta.color != ROJO_ERROR and self._responder_en_voz(por_voz):
+            self._hablar(acumulado)  # this thread is already off the UI loop
+
+    # ----- Eva's voice -----
+
+    def _responder_en_voz(self, por_voz: bool) -> bool:
+        """Whether a finished answer is read aloud on its own (S4)."""
+        modo = modo_valido(self.config.extras.get("responder_en_voz"))
+        return self.voz is not None and (modo == "siempre" or (modo == "voz" and por_voz))
+
+    def _boton_escuchar(self, texto: ft.Text) -> ft.Control | None:
+        """The "Escuchar" button of an answer bubble (None without a voice)."""
+        if self.voz is None:
+            return None
+        return ft.IconButton(
+            icon=ft.Icons.VOLUME_UP,
+            icon_size=18,
+            icon_color=GRIS_TEXTO,
+            tooltip=ESCUCHAR,
+            # Read at click time: the bubble holds the whole answer by then.
+            on_click=lambda e: self.page.run_thread(self._hablar, texto.value),
+        )
+
+    def _agregar_escuchar(self, respuesta: ft.Text) -> None:
+        boton = self._boton_escuchar(respuesta)
+        if boton is None:
+            return
+        for burbuja in self.mensajes.controls:
+            fila = burbuja.content
+            # By identity: Flet controls compare equal by value.
+            if fila.controls[0].content is respuesta and len(fila.controls) == 1:
+                fila.controls.append(boton)
+                return
+
+    def _hablar(self, texto: str) -> None:
+        """Read ``texto`` aloud with the saved voice. Blocks: run it off the UI loop.
+
+        A failure leaves a gray note; the answer stays as text."""
+        if self.voz is None:
+            return
+        aviso: ft.Text | None = None
+
+        def al_descargar() -> None:
+            nonlocal aviso
+            aviso = self.mostrar_aviso(DESCARGANDO_VOZ)
+            self.page.update()  # show the bubble before the download starts
+
+        nota = None
+        try:
+            self.voz.hablar(texto, voz_valida(self.config.extras.get("voz_eva")), al_descargar)
+        except ErrorVoz as exc:
+            nota = SIN_DESCARGA_VOZ if str(exc) == SIN_DESCARGA_VOZ else NO_PUDE_LEER
+        except Exception:
+            log.exception("Unexpected error reading the answer aloud")
+            nota = NO_PUDE_LEER
+        if aviso is not None:
+            self.quitar_aviso(aviso)
+        if nota is not None:
+            self.mostrar_aviso(nota)
+        if aviso is not None or nota is not None:
+            self.page.update()

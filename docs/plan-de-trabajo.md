@@ -131,11 +131,54 @@ eva/
 
 Una sola pantalla de chat, oscura y minimalista, donde hablar sea tan fácil como escribir.
 
-**Distribución de la pantalla:**
+**Estructura y distribución de la pantalla:**
 
-- **Barra lateral:** selector de modelo (Local / Nube), selector de voz, interruptor "Responder en voz alta", botón "Nueva conversación" y lista de conversaciones anteriores.
-- **Zona central:** burbujas de chat; las del usuario a la derecha y las del asistente a la izquierda, cada una con un botón pequeño para volver a escuchar la respuesta.
-- **Zona inferior:** campo de texto y, al lado, un botón de micrófono grande y visible.
+La interfaz se diseña alrededor de una jerarquía clara: **conversación primero, controles cerca pero discretos y Eva siempre visible como guía de estado**. La pantalla debe sentirse como un espacio de conversación, no como un panel técnico.
+
+### 1. Pantalla completa
+
+En una ventana maximizada o de escritorio amplio:
+
+- **Barra superior:** identidad de Eva, nombre de la conversación, estado actual (reposo, escuchando, pensando o hablando) y acciones globales como nueva conversación, ajustes y minimizar.
+- **Barra lateral izquierda, 280–320 px:** conversaciones recientes, botón destacado **Nueva conversación**, búsqueda del historial y acceso a Ajustes. Los controles de modelo y voz se muestran en un panel compacto, no repetidos en cada conversación.
+- **Columna central flexible:** área principal de mensajes con ancho de lectura limitado (aprox. 680–820 px), separación generosa entre turnos y desplazamiento independiente. Los mensajes del usuario se alinean a la derecha y los de Eva a la izquierda.
+- **Panel contextual derecho, 260–320 px:** Eva animada y su estado; debajo, controles de voz como **Escuchar**, **Detener** y el modo de respuesta. En pantallas más pequeñas este panel se convierte en una tarjeta plegable para no quitar espacio al chat.
+- **Barra inferior fija:** campo de texto expandible, botón de adjuntos si se incorpora más adelante, micrófono grande y botón de enviar. El foco queda en el campo de entrada después de enviar un mensaje.
+- **Mensajes de Eva:** incluyen acciones discretas al pasar el cursor o recibir foco: **Escuchar**, copiar y volver a generar cuando esas funciones estén disponibles. Las acciones no deben competir visualmente con el texto.
+
+### 2. Diferentes tamaños de pantalla
+
+La distribución es responsive y cambia por puntos de quiebre, no solo reduciendo tamaños:
+
+| Ancho disponible | Distribución | Decisión de uso |
+| --- | --- | --- |
+| 1200 px o más | Tres zonas: historial, chat y Eva/controles | Se muestran todos los paneles; el chat conserva un ancho cómodo de lectura. |
+| 800–1199 px | Historial plegable + chat + Eva como tarjeta lateral | La barra lateral se puede ocultar; el panel de Eva se reduce sin desaparecer. |
+| 560–799 px | Chat casi a pantalla completa + paneles como hojas laterales | Historial, Ajustes y Eva se abren desde botones; la entrada queda siempre visible. |
+| Menos de 560 px | Una sola columna | Chat, micrófono y enviar tienen prioridad; los demás controles aparecen en hojas o diálogos. |
+
+Reglas comunes:
+
+- Nunca forzar desplazamiento horizontal ni ocultar el campo de entrada detrás del teclado virtual.
+- Mantener objetivos táctiles de al menos 44 px, contraste alto, foco visible y etiquetas accesibles en iconos.
+- Respetar el tamaño de letra del sistema y permitir **Reducir movimiento**.
+- En orientación vertical, conservar el chat y la entrada; en horizontal, aprovechar el espacio para mostrar a Eva y el historial.
+- En ventanas estrechas, convertir la barra lateral y el panel de Eva en paneles deslizables con cierre claro y tecla `Esc`.
+
+### 3. Isla flotante al minimizar
+
+Cuando el usuario minimiza la ventana principal, Eva no debe desaparecer por completo: se transforma en una **isla flotante compacta**, siempre encima de las demás ventanas solo si el usuario lo permite.
+
+- Tamaño aproximado: **280 × 88 px**, adaptable entre 240 y 340 px de ancho.
+- Fondo oscuro translúcido, sombra suave, borde de 1 px con el turquesa de Eva y bordes redondeados de **22 px**.
+- Incluye el avatar pequeño, un indicador de estado y una acción principal contextual: **Hablar**, **Detener** o **Volver a la ventana**.
+- Si Eva está hablando, muestra una onda o pulso discreto; si está escuchando, el micrófono se vuelve rojo; en reposo, solo respira suavemente.
+- Se puede arrastrar, recuerda su última posición y no tapa automáticamente otras ventanas.
+- Un clic restaura la aplicación; `Esc` o el botón de cerrar oculta la isla sin cerrar Eva.
+- La isla no muestra conversaciones largas ni controles secundarios: su propósito es informar y ofrecer una acción rápida.
+- Debe respetar las preferencias de accesibilidad, incluido **Reducir movimiento**, y no capturar el foco mientras el usuario trabaja en otra aplicación.
+
+**Flujo de prioridad:** en pantalla completa gana la conversación; en tamaños medianos gana la conversación y se pliegan los paneles; en móvil gana la entrada; minimizada gana el estado de Eva y una sola acción rápida.
 
 **Estados visibles para el usuario:**
 
@@ -229,7 +272,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Crear la base SQLite con las tablas `conversaciones` y `mensajes`, guardada en la carpeta del usuario.
 - [x] Guardar cada mensaje y enviar los últimos 20 al modelo como contexto.
 - [x] Agregar en la barra lateral: nueva conversación y lista de conversaciones anteriores.
-- [ ] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`. *(Parcial: elige LM Studio, Ollama, OpenAI, Claude, Gemini u OpenRouter, el modelo, y la clave de API o el inicio de sesión con OpenRouter (bloque 2C); faltan la cuenta de ChatGPT (bloque 2D) y la voz (Fase 4).)*
+- [x] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`. *(Elige LM Studio, Ollama, OpenAI, Claude, Gemini u OpenRouter, el modelo, la clave de API o el inicio de sesión con OpenRouter, la voz de Eva y cuándo responde en voz alta.)*
 - [x] Descargar el programa de Engram para Windows, Mac y Linux desde sus versiones publicadas en GitHub y guardarlo en `bin/`. *(`python scripts/descargar_engram.py` baja Engram v3.7.2 y comprueba su SHA-256; con `--plataforma` baja el de otro sistema. Probado en Windows; Mac y Linux se probarán al empaquetar en la Fase 6.)*
 - [x] Implementar `memory/engram_client.py`: la app abre Engram en segundo plano y se conecta a él por MCP con la librería `mcp` de Python. *(Los recuerdos de Eva van en su propia carpeta `engram/`, nunca en la de otro uso de Engram. Falta ubicar el programa dentro de la app empaquetada, en la Fase 6.)*
 - [x] Antes de cada respuesta, buscar en Engram los recuerdos relacionados con la pregunta y agregarlos al contexto del modelo. *(Como Engram busca palabras completas, también se agregan los demás datos conocidos del usuario, hasta 8 recuerdos en total.)*
@@ -239,7 +282,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Para Claude y Gemini, ofrecer clave de API o "Iniciar sesión con OpenRouter" (OAuth con PKCE, sin necesidad de registrar la app): el usuario entra con su cuenta de OpenRouter, la app recibe una clave ligada a esa cuenta y el usuario fija su propio límite de gasto. No se usa la suscripción Claude Pro/Max ni Google AI Pro, porque sus términos no lo permiten en apps de terceros.
 - [x] Guardar el token de la cuenta y las claves de API con la librería `keyring` (el almacén seguro del sistema operativo), nunca en texto plano dentro de `config.json`.
 
-**Entregable:** el asistente recuerda lo hablado, recuerda datos del usuario entre conversaciones distintas y se configura sin tocar archivos. **Estado: bloques 2A, 2B, 2C y 2D terminados, revisados y probados con cuentas reales (671 pruebas con pytest). Solo queda la voz de los ajustes, que llega en la Fase 4.**
+**Entregable:** el asistente recuerda lo hablado, recuerda datos del usuario entre conversaciones distintas y se configura sin tocar archivos. **Estado: bloques 2A, 2B, 2C y 2D terminados, revisados y probados con cuentas reales; la voz y el modo de respuesta se agregaron en la Fase 4.**
 
 ### Fase 3 — Escuchar: voz a texto (semana 5)
 
@@ -252,14 +295,14 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 4 — Hablar: texto a voz (semana 6)
 
-- [ ] Descargar una voz de Piper en español.
-- [ ] Implementar `voice/tts.py` que convierte la respuesta en un archivo de audio.
-- [ ] Reproducir el audio automáticamente con el reproductor de Flet (`Audio`).
-- [ ] Agregar el interruptor "Responder en voz alta" y el botón para volver a escuchar.
+- [x] Descargar voces de Piper en español. *(Daniela de Argentina por defecto; también Claude y Ald de México, y Davefx de España. Se descargan bajo demanda a `modelos/piper/`.)*
+- [x] Implementar `voice/tts.py` que convierte la respuesta en un archivo de audio. *(Síntesis local con Piper, limpieza de Markdown y descarga segura en el primer uso.)*
+- [x] Reproducir el audio automáticamente con el reproductor de Flet (`Audio`). *(Al terminar la respuesta; el micrófono detiene la reproducción.)*
+- [x] Agregar el interruptor "Responder en voz alta" y el botón para volver a escuchar. *(Modos: solo cuando hablas por voz, siempre o nunca; cada respuesta terminada tiene "Escuchar".)*
 
-**Entregable:** conversación completa por voz, ida y vuelta.
+**Entregable:** conversación completa por voz, ida y vuelta. **Estado: completo, probado en Windows y documentado (793 pruebas con pytest; 3 omitidas).**
 
-### Fase 5 — Interfaz final y experiencia (semana 7)
+### Fase 5 — Interfaz y experiencia (semana 7)
 
 - [ ] Aplicar la guía visual de la sección 6 (tema oscuro de Flet y colores).
 - [ ] Agregar los indicadores de estado (escuchando, pensando, hablando).
@@ -345,4 +388,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0, 1, 2 y 3 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura y entiende lo que se le dice por micrófono. Sigue la Fase 4 (texto a voz con Piper).
+**Siguiente paso concreto:** las Fases 0, 1, 2, 3 y 4 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura, entiende lo que se le dice por micrófono y responde en voz alta con Piper. Sigue la Fase 5 (interfaz final).
