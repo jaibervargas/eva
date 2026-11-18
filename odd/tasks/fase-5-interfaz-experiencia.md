@@ -19,7 +19,7 @@ Branch: `feat/fase-5-interfaz-experiencia` (based on the Phase 4 branch until PR
 ## Tasks
 
 - T1 [S1, S2, S5] responsive visual shell and state indicators — done (L4; 796 passed, 3 skipped)
-- T2 [S3] error-state completion and regression coverage — pending
+- T2 [S3] error-state completion and regression coverage — done (L5; 796 passed, 3 skipped)
 - T3 [S4] setup_inicial.py detection/progress and tests — pending
 - T4 [S5] floating island behavior or bounded platform adapter, tests and docs — pending
 - T5 [S1-S5] docs, full verification, live test and review — pending
@@ -30,3 +30,4 @@ Branch: `feat/fase-5-interfaz-experiencia` (based on the Phase 4 branch until PR
 - L2 (user): "en el plan de trabajo en la fase 5 cambiale el titulo dejalo como Interfaz  y experiencia (semana 7), de paso en la seccion 6 en la parte de distribucion de panta lla ajustalo para que sea mas detallado en la estructura , la distribucion , enfocate en un diseño innovador comodo para el usuario , ajusta tambien para que tenga en cuenta 3 aspectos 1. la pantalla completa  , 2 . los diferentes tamaños de pantalla que puede tener, 3. cuando se minimiza quisiera que quedara una isla flotante , no tan grande con bordes redondeados"
 - L3: The work plan now records the responsive shell, full-screen hierarchy and compact floating-island direction. This phase turns that documented direction into working UI while preserving Phase 4.
 - L4 (T1 verification): Added the three-zone shell, top status bar, Eva context panel, responsive collapse below 900 px, mobile input sizing, and visible connection/thinking/listening/transcribing states. Focused UI/microphone tests: 56 passed. Full suite: 796 passed, 3 skipped. T1 is verified; no floating-island implementation yet.
+- L5 (T2 verification): Unexpected connection exceptions now show `Sin conexión`, an actionable error bubble, and preserve the retry text while unlocking the UI. Added regression coverage; focused UI/microphone tests: 56 passed. Full suite: 796 passed, 3 skipped.

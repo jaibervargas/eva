@@ -390,6 +390,8 @@ def test_field_is_unlocked_even_if_connecting_raises(monkeypatch, tmp_path):
     assert pantalla.campo.disabled is False
     assert pantalla.ocupado is False
     assert pantalla.campo.value == "hola"
+    assert pantalla.estado.value == "Sin conexión"
+    assert "Ocurrió un error inesperado al conectar con el modelo: inesperado" in _valores(pantalla)
 
 
 def test_field_is_unlocked_when_reconnecting_fails(monkeypatch, tmp_path):

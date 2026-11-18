@@ -334,9 +334,12 @@ class PantallaChat:
     def _conectar_y_enviar(self, texto: str | None, del_campo: bool = True, por_voz: bool = False) -> None:
         try:
             self._conectar()  # failures normally become the connection-error bubble
-        except Exception:
+        except Exception as exc:
             log.exception("Unexpected error while connecting")
             self.cliente = None
+            self.etiqueta_modelo.value = f"{PROVEEDORES[self.config.proveedor].nombre} · sin conexión"
+            self._poner_estado("Sin conexión", ROJO_ERROR)
+            self._mostrar_error_conexion(f"Ocurrió un error inesperado al conectar con el modelo: {exc}")
         finally:
             if texto is not None:
                 self.campo.disabled = False  # only undo the lock this path set
@@ -348,6 +351,8 @@ class PantallaChat:
             self._responder(texto, respuesta, por_voz)  # releases the screen when done
             return
         self._ocupar(False)
+        if self.cliente is None:
+            self._poner_estado("Sin conexión", ROJO_ERROR)
         self.page.update()
 
     def _conectar(self) -> None:
