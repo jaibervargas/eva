@@ -386,3 +386,29 @@ def test_transcribing_is_on_screen_before_the_transcription_starts(monkeypatch, 
 
     # The window must have been refreshed with the bubble before the slow work.
     assert vistas_previas and vistas_previas[-1][-1:] == [TRANSCRIBIENDO]
+
+
+GRABANDO = "Grabando… pulsa el botón rojo para terminar."
+
+
+def test_recording_is_on_screen_while_the_audio_is_captured(monkeypatch, tmp_path):
+    page = PaginaQueMira()
+    pantalla, _, _ = _pantalla(monkeypatch, tmp_path, page=page)
+    page.pantalla = pantalla
+    pantalla.iniciar()
+    _clic(pantalla)
+
+    assert page.vistas[-1][-1:] == [GRABANDO]  # shown while recording
+    _clic(pantalla)
+    assert GRABANDO not in [t.value for t in _textos(pantalla)]
+    assert _valores(pantalla) == ["¿Qué clima hace hoy?", "Soleado"]
+
+
+def test_the_recording_notice_goes_away_when_stopping_fails(monkeypatch, tmp_path):
+    pantalla, _, _ = _pantalla(monkeypatch, tmp_path, grabador=GrabadorFalso(error_fin=RuntimeError("roto")))
+    pantalla.iniciar()
+    _clic(pantalla)
+    _clic(pantalla)
+
+    assert GRABANDO not in [t.value for t in _textos(pantalla)]
+    assert _en_reposo(pantalla)

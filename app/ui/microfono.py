@@ -21,6 +21,7 @@ SIN_MICROFONO = "No encontré ningún micrófono conectado."
 FALLO_GRABADOR = "No pude grabar el audio: "
 NO_TE_ENTENDI = "No te entendí. Intenta hablar de nuevo."
 TRANSCRIBIENDO = "Transcribiendo…"
+GRABANDO = "Grabando… pulsa el botón rojo para terminar."
 DESCARGANDO = "Descargando el modelo de voz (unos 460 MB). Solo pasa la primera vez…"
 
 log = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ class Microfono:
         self.grabando = False
         self._procesando = False  # handling a click or transcribing
         self._ruta: str | None = None  # where the current recording goes
+        self._aviso_grabando: ft.Text | None = None  # the "Grabando…" bubble
         self.boton = ft.IconButton(icon=ft.Icons.MIC, tooltip=HABLAR, on_click=self._clic)
 
     @property
@@ -136,6 +138,7 @@ class Microfono:
         self._ruta = ruta
         self.grabando = True
         self._procesando = False
+        self._aviso_grabando = self.pantalla.mostrar_aviso(GRABANDO)
         self.actualizar()
         self.pantalla.page.update()
 
@@ -146,6 +149,9 @@ class Microfono:
     async def _detener(self) -> None:
         self._procesando = True
         self.grabando = False
+        if self._aviso_grabando is not None:
+            self.pantalla.quitar_aviso(self._aviso_grabando)
+            self._aviso_grabando = None
         self._mostrar_detener(False)
         self.actualizar()
         self.pantalla.page.update()
