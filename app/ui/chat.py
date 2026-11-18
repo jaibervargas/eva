@@ -7,9 +7,10 @@ import flet as ft
 
 from app.config import PROVEEDORES, Config
 from app.llm.base import ClienteLLM, ErrorLLM
-from app.llm.cloud_client import ClienteNube, conectar_nube, crear_cliente
+from app.llm.cloud_client import conectar_nube, crear_cliente
 from app.llm.conversacion import Conversacion, MemoriaUsuario
 from app.llm.local_client import conectar
+from app.llm.sesion_chatgpt import cliente_respaldo, conectar_chatgpt
 from app.secretos import ErrorSecretos, leer_clave
 from app.memory.history import Historial
 from app.ui.ajustes import DialogoAjustes
@@ -203,9 +204,10 @@ class PantallaChat:
         except Exception:  # e.g. the window is closing: keep the extractor alive
             log.exception("Could not refresh the screen after learning")
 
-    def _respaldo_nube(self) -> ClienteNube | None:
+    def _respaldo_nube(self) -> ClienteLLM | None:
         """Cloud client for fact extraction (the last cloud provider saved in
-        settings), or ``None`` when there is none or its key is missing."""
+        settings), or ``None`` when there is none, its key is missing or its
+        ChatGPT account is signed out."""
         respaldo = self.config.extras.get("respaldo")
         if not isinstance(respaldo, dict):
             return None
@@ -214,6 +216,8 @@ class PantallaChat:
             return None
         if not (isinstance(modelo, str) and modelo):
             return None
+        if PROVEEDORES[proveedor].cuenta:
+            return cliente_respaldo(respaldo.get("cuenta"), modelo)
         clave = leer_clave(proveedor)
         return crear_cliente(proveedor, modelo, clave) if clave else None
 
@@ -259,7 +263,9 @@ class PantallaChat:
         datos = PROVEEDORES[self.config.proveedor]
         proveedor = datos.nombre
         try:
-            if datos.nube:
+            if datos.cuenta:
+                self.cliente = conectar_chatgpt(self.config.extras.get("chatgpt_cuenta"), self.config.modelo)
+            elif datos.nube:
                 clave = leer_clave(self.config.proveedor)
                 self.cliente = conectar_nube(self.config.proveedor, self.config.modelo, clave)
             else:
@@ -274,7 +280,9 @@ class PantallaChat:
             self.etiqueta_modelo.value = f"{proveedor} · sin conexión"
             self._mostrar_error_conexion(mensaje)
         else:
-            self.etiqueta_modelo.value = f"{proveedor} · {self.cliente.modelo}"
+            # ChatGPT models have a display name besides their id.
+            nombre = getattr(self.cliente, "nombre_modelo", None) or self.cliente.modelo
+            self.etiqueta_modelo.value = f"{proveedor} · {nombre}"
             self._quitar_error_conexion()
 
     def _abrir_ajustes(self) -> None:
