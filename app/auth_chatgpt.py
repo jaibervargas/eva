@@ -278,7 +278,7 @@ def _detalle(respuesta: httpx.Response, ocultar: tuple[str, ...]) -> str:
 
 
 def _con_cliente(http_client: httpx.Client | None, accion):
-    cliente = http_client or httpx.Client(timeout=TIMEOUT_HTTP)
+    cliente = http_client or httpx.Client(timeout=TIMEOUT_HTTP, headers={"Accept": "application/json"})
     try:
         return accion(cliente)
     finally:
@@ -407,6 +407,7 @@ def iniciar_sesion_chatgpt(
     timeout: float = TIMEOUT_LOGIN,
     cancelado: threading.Event | None = None,
     http_client: httpx.Client | None = None,
+    enviar_host_id: bool = False,
 ) -> ResultadoSesion:
     """Sign in with the user's ChatGPT account and return its tokens.
 
@@ -420,7 +421,8 @@ def iniciar_sesion_chatgpt(
     user can open it by hand; without it the login fails at once. Raises
     ``ErrorAuth`` with a message for the user on any failure. Saves nothing.
     """
-    verifier = secrets.token_urlsafe(64)
+    # 32 random bytes (43 characters), the same verifier size OpenAI's devkit uses.
+    verifier = secrets.token_urlsafe(32)
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     servidor = _abrir_servidor(state, client_id)
@@ -434,7 +436,10 @@ def iniciar_sesion_chatgpt(
         parametros = {"client_id": client_id or CLIENTE_DINAMICO}
         if client_id is None:
             parametros["agent_name_hint"] = NOMBRE_AGENTE
-        parametros["ext_agent_host_id"] = host_id
+        # Off by default, like OpenAI's devkit (`sendHostId`): in a live test the
+        # code exchange failed with invalid_grant whenever it was sent.
+        if enviar_host_id:
+            parametros["ext_agent_host_id"] = host_id
         if client_id is not None and id_token_hint:
             parametros["id_token_hint"] = id_token_hint
         if client_id is not None and login_hint:

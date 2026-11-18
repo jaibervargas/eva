@@ -178,7 +178,6 @@ def _verificar_autorizacion(
 ) -> None:
     esperados = {
         "client_id",
-        "ext_agent_host_id",
         "response_type",
         "redirect_uri",
         "scope",
@@ -200,7 +199,9 @@ def _verificar_autorizacion(
     assert params["client_id"] == ("dynamic_agent_client" if nuevo else CLIENTE_EMITIDO)
     if nuevo:
         assert params["agent_name_hint"] == "Eva"
-    assert params["ext_agent_host_id"] == HOST_ID
+    # Live test (L15): sending ext_agent_host_id made OpenAI reject the code
+    # exchange with invalid_grant, so it is off unless explicitly enabled.
+    assert "ext_agent_host_id" not in params
     if id_token_hint:
         assert params["id_token_hint"] == id_token_hint
     if login_hint:
@@ -1158,3 +1159,18 @@ def test_sign_out_never_raises_on_a_broken_discovery(sin_esperas):
         return httpx.Response(200, text="no es json")
 
     assert cerrar_sesion(CLIENTE_EMITIDO, REFRESH, http_client=_cliente(roto)) is False
+
+
+def test_the_host_id_is_sent_only_when_enabled():
+    capturado = {}
+
+    def navegador(url):
+        capturado.update({k: v[0] for k, v in parse_qs(urlsplit(url).query).items()})
+        return False
+
+    for enviar, esperado in ((False, None), (True, HOST_ID)):
+        capturado.clear()
+        with pytest.raises(ErrorAuth):
+            auth_chatgpt.iniciar_sesion_chatgpt(HOST_ID, abrir_navegador=navegador, enviar_host_id=enviar)
+        assert capturado.get("ext_agent_host_id") == esperado
+
