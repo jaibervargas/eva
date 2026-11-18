@@ -353,3 +353,36 @@ def test_spoken_text_waits_for_the_connection_like_typed_text(monkeypatch, tmp_p
     server.apagado = False
     asyncio.run(pantalla._enviar(None))
     assert _valores(pantalla) == ["¿Qué clima hace hoy?", "Soleado"]
+
+
+class PaginaQueMira(FakePage):
+    """Records what the chat shows at every page.update (what the user sees)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pantalla = None
+        self.vistas: list[list[str]] = []
+
+    def update(self, *controles) -> None:
+        if self.pantalla is not None:
+            self.vistas.append([t.value for t in _textos(self.pantalla)])
+
+
+def test_transcribing_is_on_screen_before_the_transcription_starts(monkeypatch, tmp_path):
+    page = PaginaQueMira()
+    pantalla, _, transcriptor = _pantalla(monkeypatch, tmp_path, page=page)
+    page.pantalla = pantalla
+    pantalla.iniciar()
+    _clic(pantalla)
+    vistas_previas = []
+    original = transcriptor.transcribir
+
+    def transcribir(ruta):
+        vistas_previas.extend(page.vistas)
+        return original(ruta)
+
+    transcriptor.transcribir = transcribir
+    _clic(pantalla)
+
+    # The window must have been refreshed with the bubble before the slow work.
+    assert vistas_previas and vistas_previas[-1][-1:] == [TRANSCRIBIENDO]

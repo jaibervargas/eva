@@ -174,6 +174,7 @@ class Microfono:
         transcriptor = self.transcriptor
         descargar = transcriptor.necesita_descarga()
         aviso = self.pantalla.mostrar_aviso(DESCARGANDO if descargar else TRANSCRIBIENDO)
+        self.pantalla.page.update()  # show the bubble before the slow work starts
         try:
             if descargar:
                 await asyncio.to_thread(transcriptor.cargar)
