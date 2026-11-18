@@ -14,7 +14,7 @@ Vamos a construir, en unas 14 semanas y por fases, a Eva, el asistente de IA de 
 - Instalarse como aplicación de escritorio: `.exe` en Windows, `.dmg` en Mac y `.AppImage` en Linux.
 - Opcional: instalarse con `docker compose up` en servidores.
 
-**Fuera del alcance de la v1.0** (se deja para después): conectar documentos propios (RAG), app móvil, palabra de activación "Oye, Eva", usuarios múltiples con login y firma de la app en Mac (cuesta 99 USD al año).
+**Fuera del alcance de la v1.0** (se deja para después): conectar documentos propios (RAG), app móvil, palabra de activación "Oye, Eva", usuarios múltiples con login y firma de la app en Mac (cuesta 99 USD al año), y conectar con los productos de Ideva: según el usuario con el que se registre en Eva, validar si está en algún producto de Ideva para poder trabajar desde Eva con esos productos.
 
 ## 2. Arquitectura e infraestructura
 
