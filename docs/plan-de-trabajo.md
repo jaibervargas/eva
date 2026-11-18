@@ -300,7 +300,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 8 — Pruebas, documentación y lanzamiento (semanas 13 y 14)
 
-- [ ] Escribir pruebas con pytest para memoria, STT, TTS y clientes de IA. *(Parcial: 671 pruebas cubren memoria (SQLite y Engram), clientes local, de la nube y de ChatGPT, inicio de sesión, almacenamiento seguro de claves y tokens, configuración y pantallas; incluye STT con un grabador y un modelo simulados más una prueba con el modelo real; falta TTS. Pendiente: fijar la plataforma en dos pruebas de permisos para que en Mac no toquen la carpeta real del usuario.)*
+- [ ] Escribir pruebas con pytest para memoria, STT, TTS y clientes de IA. *(Parcial: 702 pruebas cubren memoria (SQLite y Engram), clientes local, de la nube y de ChatGPT, inicio de sesión, almacenamiento seguro de claves y tokens, configuración y pantallas; incluye STT con un grabador y un modelo simulados más una prueba con el modelo real; falta TTS. Pendiente: fijar la plataforma en dos pruebas de permisos para que en Mac no toquen la carpeta real del usuario.)*
 - [ ] Escribir el `README.md`: requisitos, instalación, uso, problemas frecuentes y cómo saltar la advertencia de seguridad en Mac y Windows.
 - [ ] Pedir a 2 o 3 personas que lo instalen y anotar sus problemas.
 - [ ] Corregir lo encontrado y publicar la versión 1.0 con sus instaladores en GitHub Releases.

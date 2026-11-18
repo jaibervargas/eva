@@ -24,7 +24,7 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 3) are verbatim; user decisions are q
 
 - T1 [S2, S4] `app/voice/stt.py` + tests + requirements — route: gentle-ai-worker (context backstop) — done (L5)
 - T2 [S1, S3] microphone button in the chat screen, recording, transcription and send flow, errors, tests — route: same worker — done (L5)
-- T3 [S5] docs, review, live test — docs done, live test passed (L8); review pending
+- T3 [S5] docs, review, live test — docs done, live test passed (L8); native review not due (assess: medium, under budget); independent verify passed (L9)
 
 ## Log
 
@@ -36,3 +36,4 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 3) are verbatim; user decisions are q
 - L6 (live test, user): "le doy clic al microfono hablo , pero no aparece el transcribiendo , al momento de dad clic al boton rojo de parar el audio espera un momento y ahi si aparece mi mendaje , eva si me responde en el chat". Cause: the status bubble was added without `page.update()` before the off-loop transcription, so the window only refreshed after it was removed. Fix with RED test (`test_transcribing_is_on_screen_before_the_transcription_starts`); 700 passed, 3 skipped.
 - L7 (user): "no me aparece grabando mientras se captura el audio". Added the "Grabando… pulsa el botón rojo para terminar." bubble while recording (removed when stopping, also when stopping fails) with RED test; 702 passed, 3 skipped.
 - L8 (user, live test): "listo quedo bien" (Grabando…, Transcribiendo…, message sent and answered). README section "Hablarle a Eva" and plan Fase 3 checkboxes updated.
+- L9 (independent verify, Risk item 5 dependencies): S1-S5 met, no blockers; 702 passed, 3 skipped; pip check clean; requirements only add the two pins; an on-disk model loads with local_files_only (no network), downloads go to <data>/modelos/whisper; no second start_recording; temp WAV deleted on every path; transcription off the UI loop; typed chat unchanged. Advisories: A1 hf_xet keeps a small cache in ~/.cache/huggingface/xet; A2 an interrupted download that left model.bin+config.json would load offline and keep failing; A3 a WAV is left in %TEMP% if the app closes mid-recording; A4 an exception before the try in _transcribir would leave the mic busy (unrealistic); A5 stale test count in the plan (fixed).
