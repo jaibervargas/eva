@@ -22,8 +22,8 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 3) are verbatim; user decisions are q
 
 ## Tasks
 
-- T1 [S2, S4] `app/voice/stt.py` + tests + requirements — pending
-- T2 [S1, S3] microphone button in the chat screen, recording, transcription and send flow, errors, tests — pending
+- T1 [S2, S4] `app/voice/stt.py` + tests + requirements — route: gentle-ai-worker (context backstop) — done (L5)
+- T2 [S1, S3] microphone button in the chat screen, recording, transcription and send flow, errors, tests — route: same worker — done (L5)
 - T3 [S5] docs, review, live test — pending
 
 ## Log
@@ -32,3 +32,4 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 3) are verbatim; user decisions are q
 - L2 (user): "1. que de una vez lo envie . 2. por el momento un clic para empezar y uno para terminar. 3. ese lo miramos cuando estemos en esa parte".
 - L3 (spike, user's machine): `flet-audio-recorder` 1.1.2 works in the Windows desktop client (`has_permission` True, device "Varios micrófonos (Realtek(R) Audio)", WAV default config). First attempt crashed with `PlatformException(Record, null, Error catastrófico, null)` because a second `start_recording` ran while one was active (button not disabled). Timings: small load 2.9 s, transcription 3.5 s / 6.6 s audio and 3.3 s / 3.9 s audio, both correct ("¿Qué clima va a ser el día de hoy?"); base 1.1 s, first sentence wrong ("¿Qué exclimo a hacer el día hoy?"). Models already downloaded to `%APPDATA%/Eva/modelos/whisper` (small 464 MB, base 142 MB).
 - L4 (user): model "small (Recomendado)"; download "Automática al primer uso (Recomendado)".
+- L5 (T1+T2, worker evidence): RED T1 ModuleNotFoundError app.voice.stt; GREEN 13 tests (real-model test ran because small is on disk). RED T2 15 failed (PantallaChat has no transcriptor kwarg); GREEN 15. Full suite 699 passed, 3 skipped (parent re-ran). `app/ui/microfono.py` (Microfono, recorder created on first click), `PantallaChat.enviar_texto(texto, del_campo)`, main sets `app.voice` logger to INFO. Accepted deviations: public `Transcriptor.cargar()`; `local_files_only` when the model is on disk; start_recording False → "No pude grabar el audio: la grabación no empezó."; any load failure with files missing = download failure; `cancel_recording` attempted after recorder errors; a failed spoken send fills the field only if empty; the chat is marked busy while recording/transcribing.

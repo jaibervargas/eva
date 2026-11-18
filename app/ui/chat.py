@@ -14,7 +14,9 @@ from app.llm.sesion_chatgpt import cliente_respaldo, conectar_chatgpt
 from app.secretos import ErrorSecretos, leer_clave
 from app.memory.history import Historial
 from app.ui.ajustes import DialogoAjustes
+from app.ui.microfono import Microfono
 from app.ui.recuerdos import DialogoRecuerdos
+from app.voice.stt import Transcriptor
 
 FONDO = "#0F1117"
 FONDO_LATERAL = "#161A23"
@@ -57,6 +59,8 @@ class PantallaChat:
         historial: Historial,
         config: Config,
         memoria: MemoriaUsuario | None = None,
+        transcriptor: Transcriptor | None = None,
+        grabador=None,
     ) -> None:
         self.page = page
         self.historial = historial
@@ -89,6 +93,8 @@ class PantallaChat:
             on_submit=self._enviar,
         )
         self.boton = ft.IconButton(icon=ft.Icons.SEND_ROUNDED, icon_color=AZUL_USUARIO, on_click=self._enviar)
+        # Speak instead of typing; the recorder and transcriber can be replaced in tests.
+        self.microfono = Microfono(self, transcriptor, grabador)
 
         # Sidebar
         self.lista = ft.ListView(expand=True, spacing=2)
@@ -136,7 +142,7 @@ class PantallaChat:
             ),
         )
         chat = ft.Column(
-            [self.mensajes, ft.Container(ft.Row([self.campo, self.boton]), padding=12)],
+            [self.mensajes, ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=12)],
             expand=True,
         )
         return ft.Row([lateral, chat], expand=True, spacing=0)
@@ -232,8 +238,9 @@ class PantallaChat:
             self.ocupado = ocupado
             self._estado.notify_all()
         self.boton.disabled = ocupado
+        self.microfono.actualizar()
 
-    def _conectar_en_segundo_plano(self, texto: str | None = None) -> None:
+    def _conectar_en_segundo_plano(self, texto: str | None = None, del_campo: bool = True) -> None:
         """Connect off the UI loop (it may wait for the server); then send ``texto`` if given."""
         self._ocupar(True)
         if texto is not None:
@@ -241,9 +248,9 @@ class PantallaChat:
             self.campo.disabled = True
         self.etiqueta_modelo.value = CONECTANDO
         self.page.update()
-        self.page.run_thread(self._conectar_y_enviar, texto)
+        self.page.run_thread(self._conectar_y_enviar, texto, del_campo)
 
-    def _conectar_y_enviar(self, texto: str | None) -> None:
+    def _conectar_y_enviar(self, texto: str | None, del_campo: bool = True) -> None:
         try:
             self._conectar()  # failures normally become the connection-error bubble
         except Exception:
@@ -252,8 +259,11 @@ class PantallaChat:
         finally:
             if texto is not None:
                 self.campo.disabled = False  # only undo the lock this path set
+        if texto is not None and self.cliente is None and not del_campo and not (self.campo.value or "").strip():
+            # A spoken question is kept for retrying, like a typed one.
+            self.campo.value = texto
         if texto is not None and self.cliente is not None:
-            respuesta = self._empezar_turno(texto)
+            respuesta = self._empezar_turno(texto, del_campo)
             self._responder(texto, respuesta)  # releases the screen when done
             return
         self._ocupar(False)
@@ -340,6 +350,20 @@ class PantallaChat:
         self._agregar(texto, de_usuario=False)
         self._error_conexion = self.mensajes.controls[-1]
 
+    def mostrar_error(self, mensaje: str) -> None:
+        """Show an error as a red bubble from Eva."""
+        self._agregar(ft.Text(mensaje, color=ROJO_ERROR, selectable=True), de_usuario=False)
+
+    def mostrar_aviso(self, texto: str) -> ft.Text:
+        """Show a temporary status bubble; remove it with ``quitar_aviso``."""
+        aviso = ft.Text(texto, color=GRIS_TEXTO, italic=True)
+        self._agregar(aviso, de_usuario=False)
+        return aviso
+
+    def quitar_aviso(self, aviso: ft.Text) -> None:
+        # By identity: Flet controls compare equal by value.
+        self.mensajes.controls = [c for c in self.mensajes.controls if c.content.controls[0].content is not aviso]
+
     def _quitar_error_conexion(self) -> None:
         if self._error_conexion is not None:
             # By identity: Flet controls compare equal by value.
@@ -347,23 +371,28 @@ class PantallaChat:
         self._error_conexion = None
 
     async def _enviar(self, e) -> None:
-        texto = (self.campo.value or "").strip()
+        await self.enviar_texto((self.campo.value or "").strip(), del_campo=True)
+
+    async def enviar_texto(self, texto: str, del_campo: bool = False) -> None:
+        """Send a question. ``del_campo``: it is the field's text, cleared once shown
+        (a spoken question leaves whatever was typed in the field)."""
         if not texto or self.ocupado:
             return
         if self.cliente is None:
             # The server may have been started after the app opened; the
             # question stays in the field until the connection succeeds.
-            self._conectar_en_segundo_plano(texto)
+            self._conectar_en_segundo_plano(texto, del_campo)
             return
         self._ocupar(True)
-        respuesta = self._empezar_turno(texto)
+        respuesta = self._empezar_turno(texto, del_campo)
         await self.campo.focus()
         # Streaming blocks while waiting for the model, so it runs off the UI loop.
         self.page.run_thread(self._responder, texto, respuesta)
 
-    def _empezar_turno(self, texto: str) -> ft.Text:
+    def _empezar_turno(self, texto: str, del_campo: bool = True) -> ft.Text:
         """Show the question and an answer bubble that will fill as Eva answers."""
-        self.campo.value = ""
+        if del_campo:
+            self.campo.value = ""
         self._agregar(ft.Text(texto, color=TEXTO, selectable=True), de_usuario=True)
         respuesta = ft.Text(PENSANDO, color=TEXTO, selectable=True)
         self._agregar(respuesta, de_usuario=False)
