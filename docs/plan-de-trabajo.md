@@ -345,4 +345,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0, 1, 2 y 3 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura y entiende lo que se le dice por micrófono. Sigue la Fase 4 (texto a voz con Piper).
+**Siguiente paso concreto:** las Fases 0, 1, 2, 3 y 4 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura, entiende lo que se le dice por micrófono y responde en voz alta con Piper. Sigue la Fase 5 (interfaz final).

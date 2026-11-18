@@ -27,7 +27,7 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 4 and the voice part of the Fase 2 se
 
 - T1 [S1, S2] `app/voice/tts.py` (catalog, download, synthesis, text cleanup) + tests + requirements — route: gentle-ai-worker (context backstop) — done (L5)
 - T2 [S3, S4, S5] player, automatic speaking, replay button, Ajustes voice and mode, tests — route: same worker — done (L5)
-- T3 [S6] docs, review, live test — pending
+- T3 [S6] docs, review, live test — done (L6; 793 passed, 3 skipped; live test passed)
 
 ## Log
 
@@ -36,3 +36,4 @@ Plan quotes (docs/plan-de-trabajo.md, Fase 4 and the voice part of the Fase 2 se
 - L3 (spike 2): user "los dos sonaron ya": a new `flet_audio.Audio(src=wav, autoplay=True)` per playback plays, and so does `winsound`. Timings (CPU): 66 chars → 0.23–0.9 s; 288 chars (13.6–19.7 s of audio): claude 1.16 s, ald 1.08 s, davefx 0.92 s, daniela 3.3–3.55 s. Sizes: daniela 114 MB, others 63 MB.
 - L4 (user): voice: "en el momento me gusto mas es_AR-daniela-high pero no me convence del todo mas adelante se posria cambiar?"; when: "Al terminar la respuesta (Recomendado)"; default: "Solo si le hablaste por voz"; settings: "Sí, lista de voces en Ajustes".
 - L5 (T1+T2, worker evidence): RED: collection errors (no app.voice.tts / app.ui.reproductor). GREEN: test_tts 36 (real Daniela test ran; caught a `wave` close error hiding synthesis failures), 3 new T2 files 54; full suite 793 passed, 3 skipped (parent re-ran). New `app/voice/tts.py`, `app/ui/reproductor.py` (Reproductor, VozEva, borrar_audios); `PantallaChat(voz=...)`; `enviar_texto(..., por_voz=True)` from the mic; WAVs deleted on app close in main. Accepted deviations: voice on by default only with a real `ft.Page` (tests stay silent); defaults not written to config.json unless changed; a failed voice download shows the S1 download message as the gray note; Probar voz status in its own line under the voice controls; Escuchar button only on finished answers (and history); mic questions marked with `por_voz`.
+- L6 (parent verification and live test): Native assess returned not-due (medium risk, under budget). Full suite passed: 793 passed, 3 skipped. User tested the running Windows app and reported: "listo quedo bien". Automatic voice response, replay, settings voice selection, voice mode, and test-voice flow were exercised successfully.
