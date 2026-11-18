@@ -311,6 +311,16 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 **Entregable:** versión beta lista para que otra persona la pruebe desde el código. **Estado: completa, probada en Windows con la ventana completa, layout responsive, estados, errores y la isla flotante (804 pruebas con pytest; 3 omitidas).**
 
+### Fase 5A — Tres diseños seleccionables para Eva (semana 7A)
+
+- [ ] Guardar la preferencia global `eva.ui.design` en `config.json`, validar `brisa`, `marea` y `horizonte`, y mostrar «Elige el diseño de Eva» si no existe una preferencia válida.
+- [ ] Agregar tres tarjetas de selección con vista previa y el botón «Usar este diseño»; agregar «Ajustes → Apariencia» con previsualizar, aplicar, cancelar y diseño actual marcado.
+- [ ] Implementar las diferencias estructurales de Brisa, Marea y Horizonte, no solo sus paletas, compartiendo el estado real de chat, borrador, respuesta, historial, recuerdos, micrófono y ajustes.
+- [ ] Adaptar pantalla completa, ventana mediana de 1024 × 700 e isla dinámica de aproximadamente 300 × 56, conservando tamaño, posición, respuesta en curso y estado real.
+- [ ] Omitir controles que el proyecto todavía no respalda: Favoritos, pestañas editables y tarjetas de tareas sin datos estructurados; probar contraste, foco, etiquetas accesibles y las nueve combinaciones en Windows.
+
+**Entregable:** el usuario elige Brisa, Marea u Horizonte, el diseño queda guardado y puede cambiarlo sin perder la conversación. **Estado: planificada; implementación en curso.**
+
 ### Fase 5B — Eva animada y con voz (semanas 8 y 9)
 
 - [ ] Redibujar a Eva por capas a partir de la guía de marca y exportarla a `assets/eva/`.
@@ -388,4 +398,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0, 1, 2, 3, 4 y 5 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura, entiende lo que se le dice por micrófono, responde en voz alta con Piper y tiene una interfaz responsive con isla flotante. Sigue la Fase 5B (Eva animada y con voz).
+**Siguiente paso concreto:** las Fases 0, 1, 2, 3, 4 y 5 están completas; comienza la Fase 5A, que agrega los diseños seleccionables Brisa, Marea y Horizonte antes de la Fase 5B animada.
