@@ -3,6 +3,9 @@
 Cloud providers need an API key (or, for OpenRouter, a sign-in); keys go to
 the OS keyring through ``app.secretos``, never to ``config.json``. ChatGPT uses
 a saved account instead (see ``app.ui.panel_chatgpt``).
+
+Eva's voice and when she answers aloud are saved in ``config.json`` as
+``extras["voz_eva"]`` and ``extras["responder_en_voz"]``.
 """
 
 import logging
@@ -18,6 +21,11 @@ from app.llm.cloud_client import crear_cliente
 from app.llm.local_client import ClienteLocal
 from app.secretos import ErrorSecretos, borrar_clave, guardar_clave, leer_clave
 from app.ui.panel_chatgpt import PanelChatGPT
+from app.ui.reproductor import MODO_POR_DEFECTO, MODOS, PRUEBA, VozEva, modo_valido
+from app.voice.stt import ErrorVoz
+from app.voice.tts import DESCARGANDO as DESCARGANDO_VOZ
+from app.voice.tts import PREFIJO_FALLO as FALLO_VOZ
+from app.voice.tts import VOCES, VOZ_POR_DEFECTO, voz_valida
 
 log = logging.getLogger(__name__)
 
@@ -32,10 +40,17 @@ ABRE_LA_DIRECCION = "No pude abrir el navegador. Abre esta dirección para inici
 
 
 class DialogoAjustes:
-    def __init__(self, page: ft.Page, config: Config, al_guardar: Callable[[Config], None]) -> None:
+    def __init__(
+        self,
+        page: ft.Page,
+        config: Config,
+        al_guardar: Callable[[Config], None],
+        voz: VozEva | None = None,
+    ) -> None:
         self.page = page
         self.config = config
         self.al_guardar = al_guardar
+        self.voz = voz  # reads the "Probar voz" sample; None disables the button
         self._inicio_sesion: threading.Event | None = None  # set while signing in
 
         self.proveedor = ft.Dropdown(
@@ -63,6 +78,22 @@ class DialogoAjustes:
         self.estado = ft.Text("", size=12, color=GRIS_TEXTO, selectable=True)
         self.chatgpt = PanelChatGPT(page, self.estado, self._cargar_modelos, self._vaciar_modelos)
         self.boton_guardar = ft.FilledButton("Guardar", on_click=self._guardar)
+        self.voz_eva = ft.Dropdown(
+            label="Voz de Eva",
+            value=voz_valida(config.extras.get("voz_eva")),
+            options=[ft.DropdownOption(key=k, text=v.nombre) for k, v in VOCES.items()],
+            expand=True,
+        )
+        self.boton_probar = ft.OutlinedButton(
+            "Probar voz", icon=ft.Icons.VOLUME_UP, on_click=self._probar_voz, disabled=voz is None
+        )
+        self.responder = ft.Dropdown(
+            label="Responder en voz alta",
+            value=modo_valido(config.extras.get("responder_en_voz")),
+            options=[ft.DropdownOption(key=k, text=texto) for k, texto in MODOS.items()],
+            expand=True,
+        )
+        self.estado_voz = ft.Text("", size=12, color=GRIS_TEXTO, selectable=True)
         self.dialogo = ft.AlertDialog(
             modal=True,
             title=ft.Text("Ajustes"),
@@ -82,6 +113,10 @@ class DialogoAjustes:
                         ]
                     ),
                     self.estado,
+                    ft.Divider(height=1),
+                    ft.Row([self.voz_eva, self.boton_probar]),
+                    ft.Row([self.responder]),
+                    self.estado_voz,
                 ],
                 tight=True,
                 width=420,
@@ -271,6 +306,34 @@ class DialogoAjustes:
             self.clave.value = ""  # the saved key is used from now on
             self._cargar_modelos()
 
+    # ----- voice -----
+
+    def _probar_voz(self, e) -> None:
+        """Read the sample aloud with the selected (maybe unsaved) voice."""
+        if self.voz is None:
+            return
+        self.boton_probar.disabled = True
+        self.estado_voz.value, self.estado_voz.color = "", GRIS_TEXTO
+        self.page.update()
+        self.page.run_thread(self._leer_prueba, self.voz_eva.value)
+
+    def _leer_prueba(self, voz: str) -> None:
+        def al_descargar() -> None:
+            self.estado_voz.value, self.estado_voz.color = DESCARGANDO_VOZ, GRIS_TEXTO
+            self.page.update()  # show it before the download starts
+
+        try:
+            self.voz.hablar(PRUEBA, voz, al_descargar)
+        except ErrorVoz as exc:
+            self.estado_voz.value, self.estado_voz.color = str(exc), ROJO_ERROR
+        except Exception as exc:
+            log.exception("Unexpected error trying Eva's voice")
+            self.estado_voz.value, self.estado_voz.color = f"{FALLO_VOZ}{exc}", ROJO_ERROR
+        else:
+            self.estado_voz.value, self.estado_voz.color = "", GRIS_TEXTO
+        self.boton_probar.disabled = False
+        self.page.update()
+
     # ----- save -----
 
     def _guardar(self, e) -> None:
@@ -294,6 +357,13 @@ class DialogoAjustes:
             # The last cloud model saved also extracts memories when the local
             # model fails (no key here: it stays in the keyring).
             extras["respaldo"] = {"proveedor": proveedor, "modelo": modelo}
+        for clave, valor, por_defecto in (
+            ("voz_eva", voz_valida(self.voz_eva.value), VOZ_POR_DEFECTO),
+            ("responder_en_voz", modo_valido(self.responder.value), MODO_POR_DEFECTO),
+        ):
+            # Untouched defaults are not written, so older configs stay as they were.
+            if clave in extras or valor != por_defecto:
+                extras[clave] = valor
         nueva = Config(proveedor=proveedor, modelo=modelo, extras=extras)
         try:
             guardar_config(nueva)

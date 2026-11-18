@@ -2,7 +2,8 @@
 
 Chat history and settings (config.json) live in the user data folder;
 see app.config.carpeta_datos. Long-term memory (Engram) lives in its
-``engram`` subfolder and its process is closed when the app closes.
+``engram`` subfolder and its process is closed when the app closes, as are
+the temporary WAVs of Eva's voice deleted.
 """
 
 import logging
@@ -15,6 +16,7 @@ from app.llm.conversacion import MemoriaUsuario
 from app.memory.engram_client import MemoriaEngram
 from app.memory.history import Historial
 from app.ui.chat import FONDO, PantallaChat
+from app.ui.reproductor import borrar_audios
 
 log = logging.getLogger(__name__)
 
@@ -52,12 +54,13 @@ def ejecutar() -> None:
         # On desktop ft.run returns when the window closes.
         ft.run(crear_main(memoria))
     finally:
+        borrar_audios()  # the answers read aloud
         if memoria is not None:
             memoria.cerrar()  # stops the engram process
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    # Model load and transcription times are worth seeing (plan, Fase 3).
+    # Model load, transcription and synthesis times are worth seeing (plan, Fases 3 and 4).
     logging.getLogger("app.voice").setLevel(logging.INFO)
     ejecutar()
