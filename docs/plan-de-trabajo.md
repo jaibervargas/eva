@@ -229,7 +229,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Crear la base SQLite con las tablas `conversaciones` y `mensajes`, guardada en la carpeta del usuario.
 - [x] Guardar cada mensaje y enviar los últimos 20 al modelo como contexto.
 - [x] Agregar en la barra lateral: nueva conversación y lista de conversaciones anteriores.
-- [ ] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`. *(Parcial: elige LM Studio, Ollama, OpenAI, Claude, Gemini u OpenRouter, el modelo, y la clave de API o el inicio de sesión con OpenRouter (bloque 2C); faltan la cuenta de ChatGPT (bloque 2D) y la voz (Fase 4).)*
+- [x] Crear la pantalla de ajustes (proveedor: Ollama, LM Studio o nube; modelo, elegido de la lista de modelos instalados; forma de acceso a la nube: clave de API o cuenta (ChatGPT u OpenRouter); voz) que guarda en `config.json`. *(Elige LM Studio, Ollama, OpenAI, Claude, Gemini u OpenRouter, el modelo, la clave de API o el inicio de sesión con OpenRouter, la voz de Eva y cuándo responde en voz alta.)*
 - [x] Descargar el programa de Engram para Windows, Mac y Linux desde sus versiones publicadas en GitHub y guardarlo en `bin/`. *(`python scripts/descargar_engram.py` baja Engram v3.7.2 y comprueba su SHA-256; con `--plataforma` baja el de otro sistema. Probado en Windows; Mac y Linux se probarán al empaquetar en la Fase 6.)*
 - [x] Implementar `memory/engram_client.py`: la app abre Engram en segundo plano y se conecta a él por MCP con la librería `mcp` de Python. *(Los recuerdos de Eva van en su propia carpeta `engram/`, nunca en la de otro uso de Engram. Falta ubicar el programa dentro de la app empaquetada, en la Fase 6.)*
 - [x] Antes de cada respuesta, buscar en Engram los recuerdos relacionados con la pregunta y agregarlos al contexto del modelo. *(Como Engram busca palabras completas, también se agregan los demás datos conocidos del usuario, hasta 8 recuerdos en total.)*
@@ -239,7 +239,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Para Claude y Gemini, ofrecer clave de API o "Iniciar sesión con OpenRouter" (OAuth con PKCE, sin necesidad de registrar la app): el usuario entra con su cuenta de OpenRouter, la app recibe una clave ligada a esa cuenta y el usuario fija su propio límite de gasto. No se usa la suscripción Claude Pro/Max ni Google AI Pro, porque sus términos no lo permiten en apps de terceros.
 - [x] Guardar el token de la cuenta y las claves de API con la librería `keyring` (el almacén seguro del sistema operativo), nunca en texto plano dentro de `config.json`.
 
-**Entregable:** el asistente recuerda lo hablado, recuerda datos del usuario entre conversaciones distintas y se configura sin tocar archivos. **Estado: bloques 2A, 2B, 2C y 2D terminados, revisados y probados con cuentas reales (671 pruebas con pytest). Solo queda la voz de los ajustes, que llega en la Fase 4.**
+**Entregable:** el asistente recuerda lo hablado, recuerda datos del usuario entre conversaciones distintas y se configura sin tocar archivos. **Estado: bloques 2A, 2B, 2C y 2D terminados, revisados y probados con cuentas reales; la voz y el modo de respuesta se agregaron en la Fase 4.**
 
 ### Fase 3 — Escuchar: voz a texto (semana 5)
 
@@ -252,12 +252,12 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 4 — Hablar: texto a voz (semana 6)
 
-- [ ] Descargar una voz de Piper en español.
-- [ ] Implementar `voice/tts.py` que convierte la respuesta en un archivo de audio.
-- [ ] Reproducir el audio automáticamente con el reproductor de Flet (`Audio`).
-- [ ] Agregar el interruptor "Responder en voz alta" y el botón para volver a escuchar.
+- [x] Descargar voces de Piper en español. *(Daniela de Argentina por defecto; también Claude y Ald de México, y Davefx de España. Se descargan bajo demanda a `modelos/piper/`.)*
+- [x] Implementar `voice/tts.py` que convierte la respuesta en un archivo de audio. *(Síntesis local con Piper, limpieza de Markdown y descarga segura en el primer uso.)*
+- [x] Reproducir el audio automáticamente con el reproductor de Flet (`Audio`). *(Al terminar la respuesta; el micrófono detiene la reproducción.)*
+- [x] Agregar el interruptor "Responder en voz alta" y el botón para volver a escuchar. *(Modos: solo cuando hablas por voz, siempre o nunca; cada respuesta terminada tiene "Escuchar".)*
 
-**Entregable:** conversación completa por voz, ida y vuelta.
+**Entregable:** conversación completa por voz, ida y vuelta. **Estado: completo, probado en Windows y documentado (793 pruebas con pytest; 3 omitidas).**
 
 ### Fase 5 — Interfaz final y experiencia (semana 7)
 
