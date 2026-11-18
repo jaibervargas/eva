@@ -121,6 +121,8 @@ class PantallaChat:
 
         # Sidebar
         self.lista = ft.ListView(expand=True, spacing=2)
+        self.lista_historial = ft.ListView(expand=True, spacing=2)
+        self.pestanas = ft.Row(scroll=ft.ScrollMode.AUTO, spacing=4)
         self.etiqueta_modelo = ft.Text("", size=12, color=GRIS_TEXTO, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         # Discreet note under the model label; hidden while memory works.
         self.nota_memoria = ft.Text(SIN_MEMORIA, size=11, color=GRIS_TEXTO, italic=True, visible=False)
@@ -135,7 +137,7 @@ class PantallaChat:
     # ----- layout -----
 
     def aplicar_diseno(self, diseno: str) -> None:
-        """Apply a catalog design without replacing live chat controls."""
+        """Apply a catalog design and rebuild only the presentation shell."""
         clave = diseno_valido(diseno)
         if clave is None:
             return
@@ -143,87 +145,104 @@ class PantallaChat:
         self.diseno = clave
         tema = DISENOS[clave]
         self.page.bgcolor = tema.fondo_chat
-        if self.lateral is not None:
-            self.lateral.bgcolor = tema.fondo_lateral
-        if self.panel_eva is not None:
-            self.panel_eva.bgcolor = tema.fondo_historial
         self.campo.bgcolor = tema.fondo_chat
-        self.campo.border = ft.OutlineInputBorder(border_radius=tema.radio, border_side=ft.BorderSide(1, tema.acento))
+        self.campo.border = ft.OutlineInputBorder(
+            border_radius=tema.radio, border_side=ft.BorderSide(1, tema.acento)
+        )
         self.boton.icon_color = tema.acento
+        if hasattr(self, "_shell"):
+            nuevo = self._construir_layout()
+            self._shell.controls = nuevo.controls
         self.page.update()
 
-    def vista(self) -> ft.Control:
-        self.lateral = lateral = ft.Container(
-            width=ANCHO_LATERAL,
-            bgcolor=FONDO_LATERAL,
-            padding=16,
-            border_radius=ft.BorderRadius.only(top_right=18, bottom_right=18),
-            content=ft.Column(
-                [
-                    ft.FilledButton(
-                        "Nueva conversación",
-                        icon=ft.Icons.ADD,
-                        on_click=lambda e: self._nueva(),
-                        width=ANCHO_LATERAL,
-                    ),
-                    ft.Text("Conversaciones", size=12, color=GRIS_TEXTO),
-                    self.lista,
-                    self.boton_recuerdos,
-                    ft.Divider(height=1),
-                    ft.Row(
-                        [
-                            ft.Container(
-                                ft.Column([self.etiqueta_modelo, self.nota_memoria], spacing=2, tight=True),
-                                expand=True,
-                            ),
-                            ft.IconButton(icon=ft.Icons.SETTINGS, tooltip="Ajustes", on_click=lambda e: self._abrir_ajustes()),
-                        ]
-                    ),
-                ],
-                expand=True,
+    def _crear_menu(self, ancho: int, incluir_historial: bool = True) -> ft.Container:
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        controles = [
+            ft.Row(
+                [ft.Icon(ft.Icons.AUTO_AWESOME, color=tema.acento, size=30), ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=tema.texto)],
+                spacing=8,
             ),
+            ft.FilledButton("Nueva conversación", icon=ft.Icons.ADD, on_click=lambda e: self._nueva(), width=ancho),
+            ft.TextButton("Historial", icon=ft.Icons.HISTORY, on_click=lambda e: None),
+            self.boton_recuerdos,
+        ]
+        if incluir_historial:
+            controles.extend([ft.Text("Conversaciones", size=12, color=tema.texto), self.lista])
+        controles.extend(
+            [
+                ft.Container(expand=True),
+                ft.Divider(height=1),
+                ft.Row(
+                    [
+                        ft.Container(ft.Column([self.etiqueta_modelo, self.nota_memoria], spacing=2, tight=True), expand=True),
+                        ft.IconButton(icon=ft.Icons.SETTINGS, tooltip="Ajustes", on_click=lambda e: self._abrir_ajustes()),
+                    ]
+                ),
+            ]
         )
-        barra = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=TEXTO),
-                    ft.Container(expand=True),
-                    self.estado,
-                ],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
+        return ft.Container(width=ancho, bgcolor=tema.fondo_lateral, padding=16, content=ft.Column(controles, expand=True))
+
+    def _crear_historial_marea(self) -> ft.Container:
+        tema = DISENOS["marea"]
+        return ft.Container(
+            width=238,
+            bgcolor=tema.fondo_historial,
+            padding=14,
+            content=ft.Column([ft.Text("Historial", size=18, color=tema.texto), self.lista_historial], expand=True),
+        )
+
+    def _crear_barra(self) -> ft.Container:
+        return ft.Container(
+            content=ft.Row([ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=TEXTO), ft.Container(expand=True), self.estado]),
             padding=ft.Padding.only(left=20, right=20, top=14, bottom=8),
         )
-        self.panel_eva = ft.Container(
+
+    def _crear_panel_eva(self) -> ft.Container:
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        return ft.Container(
             width=ANCHO_PANEL_EVA,
-            bgcolor=FONDO_LATERAL,
+            bgcolor=tema.fondo_historial,
             border_radius=22,
             padding=20,
             content=ft.Column(
-                [
-                    ft.Icon(ft.Icons.AUTO_AWESOME, size=48, color="#67E8F9"),
-                    ft.Text("Eva", size=22, weight=ft.FontWeight.W_600, color=TEXTO),
-                    ft.Text("Tu espacio para pensar, hablar y crear.", color=GRIS_TEXTO, size=12),
-                    ft.Divider(height=20, color="#2B3445"),
-                    self.estado_panel,
-                ],
+                [ft.Icon(ft.Icons.AUTO_AWESOME, size=48, color=tema.acento), ft.Text("Eva", size=22, weight=ft.FontWeight.W_600, color=tema.texto), ft.Text("Tu espacio para pensar, hablar y crear.", color=GRIS_TEXTO, size=12), ft.Divider(height=20, color="#2B3445"), self.estado_panel],
                 spacing=8,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
         )
-        chat = ft.Column(
-            [
-                ft.Column([barra, self.mensajes], expand=True),
-                ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=16),
-            ],
-            expand=True,
-        )
-        shell = ft.Row([lateral, chat, self.panel_eva], expand=True, spacing=0)
+
+    def _crear_tabs_horizonte(self) -> ft.Row:
+        self.pestanas.controls = []
+        for resumen in self.historial.listar_conversaciones()[:6]:
+            self.pestanas.controls.append(ft.TextButton(resumen.titulo, on_click=lambda e, cid=resumen.id: self._abrir(cid)))
+        return self.pestanas
+
+    def _construir_layout(self) -> ft.Row:
+        clave = self.diseno or "brisa"
+        barra = self._crear_barra()
+        composer = ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=16)
+        if clave == "marea":
+            self.lateral = self._crear_menu(210, incluir_historial=False)
+            historial = self._crear_historial_marea()
+            self.panel_eva = None
+            chat = ft.Column([ft.Column([barra, self.mensajes], expand=True), composer], expand=True)
+            return ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
+        self.lateral = self._crear_menu(ANCHO_LATERAL)
+        self.panel_eva = self._crear_panel_eva()
+        if clave == "horizonte":
+            cabecera = ft.Column([self._crear_tabs_horizonte(), barra], tight=True)
+            chat = ft.Column([ft.Column([cabecera, self.mensajes], expand=True), composer], expand=True)
+            return ft.Row([self.lateral, chat], expand=True, spacing=0)
+        chat = ft.Column([ft.Column([barra, self.mensajes], expand=True), composer], expand=True)
+        return ft.Row([self.lateral, chat, self.panel_eva], expand=True, spacing=0)
+
+    def vista(self) -> ft.Control:
+        self._shell = self._construir_layout()
         self._ajustar_layout(None)
         if self.diseno is not None:
             self.aplicar_diseno(self.diseno)
         self.page.on_resize = self._ajustar_layout
-        return shell
+        return self._shell
 
     def vista_isla(self) -> ft.Control:
         """Compact view used while the desktop window is minimized."""
@@ -444,16 +463,21 @@ class PantallaChat:
     # ----- conversations -----
 
     def _refrescar_lista(self) -> None:
-        self.lista.controls = [
-            ft.ListTile(
+        conversaciones = self.historial.listar_conversaciones()
+
+        def fila(c):
+            return ft.ListTile(
                 title=ft.Text(c.titulo, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, size=14),
                 selected=c.id == self.conversacion_id,
                 selected_tile_color=GRIS_EVA,
                 dense=True,
                 on_click=lambda e, cid=c.id: self._abrir(cid),
             )
-            for c in self.historial.listar_conversaciones()
-        ]
+
+        self.lista.controls = [fila(c) for c in conversaciones]
+        self.lista_historial.controls = [fila(c) for c in conversaciones]
+        if self.diseno == "horizonte":
+            self._crear_tabs_horizonte()
 
     def _nueva(self) -> None:
         if self.ocupado:
