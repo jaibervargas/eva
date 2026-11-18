@@ -1,6 +1,6 @@
 # Plan de trabajo – Eva, el asistente de IA de IDEVA
 
-Nov 16, 2026 · @Esperanza · actualizado el Nov 17, 2026 (Fase 2 terminada)
+Nov 16, 2026 · @Esperanza · actualizado el Nov 18, 2026 (Fase 2 terminada y en `main`)
 
 ## 1. Resumen y objetivos
 
@@ -221,7 +221,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Crear la pantalla de chat en Flet: lista de burbujas y campo de texto.
 - [x] Mostrar la respuesta en streaming (palabra por palabra).
 
-**Entregable:** chat por texto funcionando con el modelo local y con el de la nube. **Estado: chat local funcionando y verificado (11 pruebas con pytest); falta la revisión visual. La parte de la nube pasa a la Fase 2.**
+**Entregable:** chat por texto funcionando con el modelo local y con el de la nube. **Estado: completa. El chat local funciona y se probó en una ventana real; la parte de la nube se hizo en la Fase 2 (bloques 2C y 2D).**
 
 ### Fase 2 — Memoria, Engram y ajustes (semanas 3 y 4)
 
@@ -263,7 +263,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 - [ ] Aplicar la guía visual de la sección 6 (tema oscuro de Flet y colores).
 - [ ] Agregar los indicadores de estado (escuchando, pensando, hablando).
-- [ ] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Parcial, adelantado en el bloque 2A: LM Studio u Ollama apagado o que se corta a mitad de respuesta, errores inesperados, ajustes que no se pueden guardar y conexión en segundo plano sin congelar la ventana. Pendiente de la revisión: si la conexión falla de forma inesperada, la etiqueta queda en "Conectando…" sin burbuja de error.)*
+- [ ] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Parcial, adelantado en el bloque 2A: LM Studio u Ollama apagado o que se corta a mitad de respuesta, errores inesperados, ajustes que no se pueden guardar y conexión en segundo plano sin congelar la ventana. Pendiente de la revisión: si la conexión falla de forma inesperada, la etiqueta queda en "Conectando…" sin burbuja de error. Adelantado en los bloques 2C y 2D: clave de API inválida, sin conexión o demora del proveedor de la nube, límite de uso o falta de saldo, sesión de ChatGPT vencida y plan de ChatGPT no autorizado. Falta: sin micrófono (Fase 3).)*
 - [ ] Escribir `setup_inicial.py`: detectar si Ollama o LM Studio están abiertos y descargar los modelos de voz al primer inicio, con barra de progreso.
 
 **Entregable:** versión beta lista para que otra persona la pruebe desde el código.
@@ -300,7 +300,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 8 — Pruebas, documentación y lanzamiento (semanas 13 y 14)
 
-- [ ] Escribir pruebas con pytest para memoria, STT, TTS y clientes de IA. *(Parcial: 68 pruebas cubren memoria, cliente local, configuración y pantalla. Pendiente: fijar la plataforma en dos pruebas de permisos para que en Mac no toquen la carpeta real del usuario.)*
+- [ ] Escribir pruebas con pytest para memoria, STT, TTS y clientes de IA. *(Parcial: 671 pruebas cubren memoria (SQLite y Engram), clientes local, de la nube y de ChatGPT, inicio de sesión, almacenamiento seguro de claves y tokens, configuración y pantallas; faltan STT y TTS. Pendiente: fijar la plataforma en dos pruebas de permisos para que en Mac no toquen la carpeta real del usuario.)*
 - [ ] Escribir el `README.md`: requisitos, instalación, uso, problemas frecuentes y cómo saltar la advertencia de seguridad en Mac y Windows.
 - [ ] Pedir a 2 o 3 personas que lo instalen y anotar sus problemas.
 - [ ] Corregir lo encontrado y publicar la versión 1.0 con sus instaladores en GitHub Releases.
