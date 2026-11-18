@@ -16,6 +16,7 @@ from app.llm.conversacion import MemoriaUsuario
 from app.memory.engram_client import MemoriaEngram
 from app.memory.history import Historial
 from app.ui.chat import FONDO, PantallaChat
+from app.ui.disenos import SelectorDiseno, leer_diseno
 from app.ui.isla import IslaFlotante
 from app.ui.reproductor import borrar_audios
 
@@ -52,7 +53,10 @@ def crear_main(memoria: MemoriaEngram | None) -> Callable[[ft.Page], None]:
             page.add(ft.Stack([completa, isla], expand=True))
         else:  # compatibility with small integration doubles
             page.add(completa)
-        pantalla.iniciar()
+        if isinstance(page, ft.Page) and leer_diseno(pantalla.config) is None:
+            SelectorDiseno(page, pantalla.config, lambda diseno: (pantalla.aplicar_diseno(diseno), pantalla.iniciar())).abrir()
+        else:
+            pantalla.iniciar()
 
     return main
 

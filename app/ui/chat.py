@@ -14,6 +14,7 @@ from app.llm.sesion_chatgpt import cliente_respaldo, conectar_chatgpt
 from app.secretos import ErrorSecretos, leer_clave
 from app.memory.history import Historial
 from app.ui.ajustes import DialogoAjustes
+from app.ui.disenos import DISENOS, EstadoInterfaz, diseno_valido, leer_diseno
 from app.ui.microfono import Microfono
 from app.ui.recuerdos import DialogoRecuerdos
 from app.ui.reproductor import ESCUCHAR, NO_PUDE_LEER, VozEva, modo_valido
@@ -79,6 +80,8 @@ class PantallaChat:
         self.voz = voz if voz is not None else (VozEva(page) if isinstance(page, ft.Page) else None)
         self.historial = historial
         self.config = config
+        self.estado_ui = EstadoInterfaz(diseno=leer_diseno(config))
+        self.diseno = self.estado_ui.diseno
         # Long-term memory (Engram); None when it could not even be created.
         self.memoria = memoria
         self.cliente: ClienteLLM | None = None
@@ -130,6 +133,24 @@ class PantallaChat:
         )
 
     # ----- layout -----
+
+    def aplicar_diseno(self, diseno: str) -> None:
+        """Apply a catalog design without replacing live chat controls."""
+        clave = diseno_valido(diseno)
+        if clave is None:
+            return
+        self.estado_ui.diseno = clave
+        self.diseno = clave
+        tema = DISENOS[clave]
+        self.page.bgcolor = tema.fondo_chat
+        if self.lateral is not None:
+            self.lateral.bgcolor = tema.fondo_lateral
+        if self.panel_eva is not None:
+            self.panel_eva.bgcolor = tema.fondo_historial
+        self.campo.bgcolor = tema.fondo_chat
+        self.campo.border = ft.OutlineInputBorder(border_radius=tema.radio, border_side=ft.BorderSide(1, tema.acento))
+        self.boton.icon_color = tema.acento
+        self.page.update()
 
     def vista(self) -> ft.Control:
         self.lateral = lateral = ft.Container(
@@ -199,6 +220,8 @@ class PantallaChat:
         )
         shell = ft.Row([lateral, chat, self.panel_eva], expand=True, spacing=0)
         self._ajustar_layout(None)
+        if self.diseno is not None:
+            self.aplicar_diseno(self.diseno)
         self.page.on_resize = self._ajustar_layout
         return shell
 
@@ -436,6 +459,7 @@ class PantallaChat:
         if self.ocupado:
             return
         self.conversacion_id = None
+        self.estado_ui.conversacion_id = None
         self.mensajes.controls.clear()
         self._error_conexion = None
         self._refrescar_lista()
@@ -445,6 +469,7 @@ class PantallaChat:
         if self.ocupado:
             return
         self.conversacion_id = conversacion_id
+        self.estado_ui.conversacion_id = conversacion_id
         self.mensajes.controls = []
         for m in self.historial.mensajes(conversacion_id):
             texto = ft.Text(m["content"], color=TEXTO, selectable=True)
@@ -510,6 +535,8 @@ class PantallaChat:
         """Show the question and an answer bubble that will fill as Eva answers."""
         if del_campo:
             self.campo.value = ""
+        self.estado_ui.borrador = "" if del_campo else (self.campo.value or "")
+        self.estado_ui.respuesta_en_curso = True
         self._agregar(ft.Text(texto, color=TEXTO, selectable=True), de_usuario=True)
         respuesta = ft.Text(PENSANDO, color=TEXTO, selectable=True)
         self._agregar(respuesta, de_usuario=False)
@@ -542,6 +569,7 @@ class PantallaChat:
             respuesta.color = ROJO_ERROR
         finally:
             self._ocupar(False)
+            self.estado_ui.respuesta_en_curso = False
             self._refrescar_lista()
             self._actualizar_nota_memoria()
             self.page.update()

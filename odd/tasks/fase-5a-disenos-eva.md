@@ -19,7 +19,7 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 
 ## Tasks
 
-- T1 [S1, S2] shared UI state, design catalog, persistence and chooser — pending
+- T1 [S1, S2] shared UI state, design catalog, persistence and chooser — done (L4; 808 passed, 3 skipped)
 - T2 [S3] Brisa, Marea and Horizonte layouts — pending
 - T3 [S4] fullscreen/medium/island integration per design — pending
 - T4 [S5, S6] tests, docs, captures and Windows validation — pending
@@ -30,3 +30,4 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - L1 (user): "Implementa estos  tres diseños seleccionables para Eva, mi agente . Usa las imágenes adjuntas de Brisa, Marea y Horizonte como referencia ubicadas en  C:\\xampp\\htdocs\\eva\\docs\\referencias. ... analiza esto y validalo antes de implementyar los cambios"
 - L2 (analysis): Validated entry point `app/main.py`, Flet 1.1.2, `PantallaChat`/`DialogoAjustes`/`Config.extras`/SQLite history, current window adapter, and reference images. No production changes were made before validation. No assets exist under `assets/eva/`; the seed image is under `docs/referencias` and has a white background.
 - L3 (decision): User approved implementation and asked to add it to the work plan as Phase 5A: "si me parece de paso agrega estos cambios en el pland e trabajo como fase 5A".
+- L4 (T1 verification): Added `app/ui/disenos.py` with the three structural design tokens, nested preference helpers, shared `EstadoInterfaz`, and first-run `SelectorDiseno`; wired selection into `app/main.py` and the live chat theme. Focused tests: 48 passed. Full suite: 808 passed, 3 skipped.
