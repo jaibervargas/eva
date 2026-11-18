@@ -20,7 +20,7 @@ Branch: `feat/fase-5-interfaz-experiencia` (based on the Phase 4 branch until PR
 
 - T1 [S1, S2, S5] responsive visual shell and state indicators — done (L4; 796 passed, 3 skipped)
 - T2 [S3] error-state completion and regression coverage — done (L5; 796 passed, 3 skipped)
-- T3 [S4] setup_inicial.py detection/progress and tests — pending
+- T3 [S4] setup_inicial.py detection/progress and tests — done (L6; 800 passed, 3 skipped)
 - T4 [S5] floating island behavior or bounded platform adapter, tests and docs — pending
 - T5 [S1-S5] docs, full verification, live test and review — pending
 
@@ -31,3 +31,4 @@ Branch: `feat/fase-5-interfaz-experiencia` (based on the Phase 4 branch until PR
 - L3: The work plan now records the responsive shell, full-screen hierarchy and compact floating-island direction. This phase turns that documented direction into working UI while preserving Phase 4.
 - L4 (T1 verification): Added the three-zone shell, top status bar, Eva context panel, responsive collapse below 900 px, mobile input sizing, and visible connection/thinking/listening/transcribing states. Focused UI/microphone tests: 56 passed. Full suite: 796 passed, 3 skipped. T1 is verified; no floating-island implementation yet.
 - L5 (T2 verification): Unexpected connection exceptions now show `Sin conexión`, an actionable error bubble, and preserve the retry text while unlocking the UI. Added regression coverage; focused UI/microphone tests: 56 passed. Full suite: 796 passed, 3 skipped.
+- L6 (T3 verification): Added `app/setup_inicial.py` with injectable server detection, Piper/Whisper preparation, progress callbacks and CLI entry point. Setup tests: 4 passed. Full suite: 800 passed, 3 skipped. T3 is verified; no real network or model download was used.
