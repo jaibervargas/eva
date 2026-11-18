@@ -16,6 +16,7 @@ from app.llm.conversacion import MemoriaUsuario
 from app.memory.engram_client import MemoriaEngram
 from app.memory.history import Historial
 from app.ui.chat import FONDO, PantallaChat
+from app.ui.isla import IslaFlotante
 from app.ui.reproductor import borrar_audios
 
 log = logging.getLogger(__name__)
@@ -42,7 +43,15 @@ def crear_main(memoria: MemoriaEngram | None) -> Callable[[ft.Page], None]:
             cargar_config(),
             MemoriaUsuario(memoria) if memoria is not None else None,
         )
-        page.add(pantalla.vista())
+        completa = pantalla.vista()
+        if hasattr(pantalla, "vista_isla"):
+            isla = pantalla.vista_isla()
+            controlador = IslaFlotante(page, completa, isla)
+            pantalla.asignar_restaurar_isla(controlador.restaurar)
+            controlador.instalar()
+            page.add(ft.Stack([completa, isla], expand=True))
+        else:  # compatibility with small integration doubles
+            page.add(completa)
         pantalla.iniciar()
 
     return main

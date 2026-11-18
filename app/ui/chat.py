@@ -94,8 +94,10 @@ class PantallaChat:
         self._error_conexion: ft.Control | None = None  # at most one shown
         self.estado = ft.Text(LISTO, size=12, color=GRIS_TEXTO)
         self.estado_panel = ft.Text(LISTO, size=12, color=GRIS_TEXTO)
+        self.estado_isla = ft.Text(LISTO, size=11, color=GRIS_TEXTO)
         self.lateral: ft.Control | None = None
         self.panel_eva: ft.Control | None = None
+        self._restaurar_isla = lambda: None
 
         # Chat area
         self.mensajes = ft.ListView(expand=True, spacing=10, padding=16, auto_scroll=True)
@@ -199,6 +201,26 @@ class PantallaChat:
         self._ajustar_layout(None)
         self.page.on_resize = self._ajustar_layout
         return shell
+
+    def vista_isla(self) -> ft.Control:
+        """Compact view used while the desktop window is minimized."""
+        return ft.Container(
+            visible=False,
+            bgcolor=FONDO_LATERAL,
+            border_radius=22,
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.AUTO_AWESOME, color="#67E8F9", size=28),
+                    ft.Column([ft.Text("Eva", color=TEXTO, weight=ft.FontWeight.W_600), self.estado_isla], spacing=0, expand=True),
+                    ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip="Volver a la ventana", on_click=lambda e: self._restaurar_isla()),
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        )
+
+    def asignar_restaurar_isla(self, restaurar) -> None:
+        self._restaurar_isla = restaurar
 
     def _ajustar_layout(self, e) -> None:
         """Collapse secondary panels when the window becomes tablet-sized."""
@@ -309,6 +331,8 @@ class PantallaChat:
         self.estado.color = color
         self.estado_panel.value = texto
         self.estado_panel.color = color
+        self.estado_isla.value = texto
+        self.estado_isla.color = color
 
     def _ocupar(self, ocupado: bool) -> None:
         with self._estado:
