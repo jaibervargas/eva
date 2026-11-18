@@ -1,0 +1,39 @@
+# Fase 3 — Escuchar: voz a texto
+
+The user clicks a microphone button, speaks, clicks again, and Eva transcribes the audio locally with faster-whisper and sends the text to the chat.
+Branch: `feat/fase-3-voz-a-texto` (from `main` 8d70367). Python 3.11, Flet 1.1.2, Windows dev machine (Git Bash). Tests: `venv/Scripts/python.exe -m pytest -q` (671 passed, 3 skipped at start).
+
+## Specs
+
+Plan quotes (docs/plan-de-trabajo.md, Fase 3) are verbatim; user decisions are quoted in the Log; the rest is the parent's technical design. User-facing text: neutral Spanish with "tú".
+
+- S1 (plan): "Agregar el botón de micrófono con el grabador de audio de Flet (`AudioRecorder`)."
+  User decision (L2): "por el momento un clic para empezar y uno para terminar".
+  Design: a microphone `IconButton` next to the send button (tooltip "Hablar"). First click: checks permission and input devices, starts an `AudioRecorder` (package `flet-audio-recorder`, added to `page.services`) with `encoder=WAV` and the recorder's default sample rate/channels (L3: a custom 16 kHz mono config was not needed), writing to a temp file; the icon switches to stop (red, tooltip "Detener") at once, and while recording the chat shows the status bubble "Grabando… pulsa el botón rojo para terminar." (removed on stop, L7). Second click: stops, then transcribes (S2) and sends (S3). The button is disabled while a click is being handled, while transcribing, and while Eva connects or answers (no second `start_recording` can ever run while one is active: L3 showed that crashes the Windows recorder with `PlatformException(Record, null, Error catastrófico, null)`). The temp audio file is deleted after transcription (also on errors). Errors shown in the chat as a red bubble, recording state reset: no permission → "Eva no tiene permiso para usar el micrófono. Actívalo en la configuración de privacidad de Windows."; no input device → "No encontré ningún micrófono conectado."; recorder failure → "No pude grabar el audio: <detalle>".
+- S2 (plan): "Implementar `voice/stt.py` con faster-whisper (modelo `small`, idioma español)."
+  User decisions (L4): model "small (Recomendado)"; download "Automática al primer uso (Recomendado)".
+  Design: `app/voice/stt.py` with `ErrorVoz(Exception)` (user message) and `Transcriptor(modelo="small", carpeta=None)` (default `carpeta_datos()/"modelos"/"whisper"`): `transcribir(ruta) -> str` loads the model lazily once (thread-safe), `device="cpu"`, `compute_type="int8"`, `download_root=carpeta`, then transcribes with `language="es"`, `vad_filter=True`, joining segment texts stripped. `necesita_descarga() -> bool` tells whether the model files are missing. First use downloads automatically; while it does, the chat shows "Descargando el modelo de voz (unos 460 MB). Solo pasa la primera vez…" and then "Transcribiendo…". Download failure → `ErrorVoz("No pude descargar el modelo de voz. Revisa tu conexión a internet.")`; other load/transcription failures → `ErrorVoz("No pude transcribir el audio: <detalle>")`. Each transcription logs its duration at INFO. Transcription runs off the UI loop.
+- S3 (plan): "Mostrar el texto transcrito y enviarlo al chat."
+  User decision (L2): "que de una vez lo envie".
+  Design: the transcribed text goes through exactly the same send path as typed text (user bubble, history, memory, any provider). Empty or whitespace-only transcription → nothing sent, red bubble "No te entendí. Intenta hablar de nuevo.".
+- S4 (plan): "Medir el tiempo de transcripción; si pasa de 5 segundos, probar el modelo `base`."
+  Evidence (L3): on the user's machine `small` took 3.3–3.5 s for 4–7 s of audio (model load 2.9 s once) and transcribed correctly; `base` took 1.1 s but misheard one sentence. Decision: keep `small`; durations stay logged.
+- S5: requirements pin `flet-audio-recorder==1.1.2` and `faster-whisper==1.2.1`; unit tests fake the recorder and the Whisper model (no download, no microphone); one optional test with the real model, skipped when the model is not in the data folder; README and plan updated; native review; live test by the user in the app.
+
+## Tasks
+
+- T1 [S2, S4] `app/voice/stt.py` + tests + requirements — route: gentle-ai-worker (context backstop) — done (L5)
+- T2 [S1, S3] microphone button in the chat screen, recording, transcription and send flow, errors, tests — route: same worker — done (L5)
+- T3 [S5] docs, review, live test — docs done, live test passed (L8); native review not due (assess: medium, under budget); independent verify passed (L9)
+
+## Log
+
+- L1 (user): "si pero antes cuentame que vamos a realizar en la fase 3".
+- L2 (user): "1. que de una vez lo envie . 2. por el momento un clic para empezar y uno para terminar. 3. ese lo miramos cuando estemos en esa parte".
+- L3 (spike, user's machine): `flet-audio-recorder` 1.1.2 works in the Windows desktop client (`has_permission` True, device "Varios micrófonos (Realtek(R) Audio)", WAV default config). First attempt crashed with `PlatformException(Record, null, Error catastrófico, null)` because a second `start_recording` ran while one was active (button not disabled). Timings: small load 2.9 s, transcription 3.5 s / 6.6 s audio and 3.3 s / 3.9 s audio, both correct ("¿Qué clima va a ser el día de hoy?"); base 1.1 s, first sentence wrong ("¿Qué exclimo a hacer el día hoy?"). Models already downloaded to `%APPDATA%/Eva/modelos/whisper` (small 464 MB, base 142 MB).
+- L4 (user): model "small (Recomendado)"; download "Automática al primer uso (Recomendado)".
+- L5 (T1+T2, worker evidence): RED T1 ModuleNotFoundError app.voice.stt; GREEN 13 tests (real-model test ran because small is on disk). RED T2 15 failed (PantallaChat has no transcriptor kwarg); GREEN 15. Full suite 699 passed, 3 skipped (parent re-ran). `app/ui/microfono.py` (Microfono, recorder created on first click), `PantallaChat.enviar_texto(texto, del_campo)`, main sets `app.voice` logger to INFO. Accepted deviations: public `Transcriptor.cargar()`; `local_files_only` when the model is on disk; start_recording False → "No pude grabar el audio: la grabación no empezó."; any load failure with files missing = download failure; `cancel_recording` attempted after recorder errors; a failed spoken send fills the field only if empty; the chat is marked busy while recording/transcribing.
+- L6 (live test, user): "le doy clic al microfono hablo , pero no aparece el transcribiendo , al momento de dad clic al boton rojo de parar el audio espera un momento y ahi si aparece mi mendaje , eva si me responde en el chat". Cause: the status bubble was added without `page.update()` before the off-loop transcription, so the window only refreshed after it was removed. Fix with RED test (`test_transcribing_is_on_screen_before_the_transcription_starts`); 700 passed, 3 skipped.
+- L7 (user): "no me aparece grabando mientras se captura el audio". Added the "Grabando… pulsa el botón rojo para terminar." bubble while recording (removed when stopping, also when stopping fails) with RED test; 702 passed, 3 skipped.
+- L8 (user, live test): "listo quedo bien" (Grabando…, Transcribiendo…, message sent and answered). README section "Hablarle a Eva" and plan Fase 3 checkboxes updated.
+- L9 (independent verify, Risk item 5 dependencies): S1-S5 met, no blockers; 702 passed, 3 skipped; pip check clean; requirements only add the two pins; an on-disk model loads with local_files_only (no network), downloads go to <data>/modelos/whisper; no second start_recording; temp WAV deleted on every path; transcription off the UI loop; typed chat unchanged. Advisories: A1 hf_xet keeps a small cache in ~/.cache/huggingface/xet; A2 an interrupted download that left model.bin+config.json would load offline and keep failing; A3 a WAV is left in %TEMP% if the app closes mid-recording; A4 an exception before the try in _transcribir would leave the mic busy (unrealistic); A5 stale test count in the plan (fixed).

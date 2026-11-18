@@ -58,4 +58,6 @@ def ejecutar() -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    # Model load and transcription times are worth seeing (plan, Fase 3).
+    logging.getLogger("app.voice").setLevel(logging.INFO)
     ejecutar()

@@ -107,9 +107,9 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 | 7 — Docker, opcional | 12 | `docker compose up` para servidores |
 | 8 — Pruebas, documentación y lanzamiento | 13–14 | Pruebas con pytest, README, pruebas con usuarios, versión 1.0 publicada |
 
-**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Con el bloque 2C, Eva también usa OpenAI, Claude, Gemini u OpenRouter con tu clave de API (guardada en el almacén seguro del sistema) o iniciando sesión con OpenRouter, y usa la nube como respaldo al extraer recuerdos. Con el bloque 2D, Eva también usa tu plan de ChatGPT Plus/Pro ("Iniciar sesión con ChatGPT", con varias cuentas). La Fase 2 está completa.
+**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Con el bloque 2C, Eva también usa OpenAI, Claude, Gemini u OpenRouter con tu clave de API (guardada en el almacén seguro del sistema) o iniciando sesión con OpenRouter, y usa la nube como respaldo al extraer recuerdos. Con el bloque 2D, Eva también usa tu plan de ChatGPT Plus/Pro ("Iniciar sesión con ChatGPT", con varias cuentas). La Fase 2 está completa. Con la Fase 3 puedes hablarle a Eva: el micrófono transcribe tu voz en tu equipo y la envía al chat.
 
-**Siguiente paso concreto:** Fase 3 (voz a texto).
+**Siguiente paso concreto:** Fase 4 (texto a voz: que Eva responda en voz alta).
 
 ## Instalación y ejecución
 
@@ -242,6 +242,19 @@ Cómo funciona:
 Los recuerdos se guardan en la subcarpeta `engram/` de la carpeta de datos de
 Eva (ver abajo), nunca en `~/.engram`, que es la de otros usos de Engram.
 
+### 6. Hablarle a Eva (voz a texto)
+
+Junto al botón de enviar está el **micrófono**. Púlsalo, habla y pulsa el botón
+rojo para terminar: mientras grabas el chat dice "Grabando… pulsa el botón rojo
+para terminar.", luego "Transcribiendo…", y tu pregunta se envía sola, como si la
+hubieras escrito. La transcripción se hace en tu equipo, sin internet, con
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) (modelo `small`, en
+español); en un equipo de pruebas tarda unos 3–4 segundos por frase. La primera vez
+Eva descarga el modelo (unos 460 MB) a la subcarpeta `modelos/whisper/` de su
+carpeta de datos y lo avisa en el chat. Si Windows no deja usar el micrófono,
+actívalo en Configuración → Privacidad y seguridad → Micrófono. El audio grabado
+se borra apenas se transcribe.
+
 ### Dónde se guardan los datos
 
 | Sistema | Carpeta |
@@ -251,12 +264,12 @@ Eva (ver abajo), nunca en `~/.engram`, que es la de otros usos de Engram.
 | Linux | `~/.local/share/eva` |
 
 Ahí están `eva.db` (el historial del chat, en SQLite), `config.json` (los
-ajustes) y la carpeta `engram/` (los recuerdos a largo plazo, con el registro
-`engram-mcp.log` de Engram). En Mac y Linux la carpeta queda con permisos `700`: solo tu usuario
+ajustes) la carpeta `engram/` (los recuerdos a largo plazo, con el registro
+`engram-mcp.log` de Engram) y `modelos/whisper/` (el modelo de voz a texto). En Mac y Linux la carpeta queda con permisos `700`: solo tu usuario
 puede leer tus conversaciones. Para usar otra carpeta, define la variable `EVA_DATA_DIR` antes de
 correr la app; por ejemplo, en PowerShell: `$env:EVA_DATA_DIR = "C:\pruebas\eva"`.
 
-### 6. Correr las pruebas
+### 7. Correr las pruebas
 
 No necesitan LM Studio ni Engram: usan un servidor y una memoria simulados. Si
 el programa de Engram está en `bin/` (o en el PATH), unas pruebas extra lo usan
