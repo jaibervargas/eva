@@ -309,7 +309,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Los errores existentes se mantienen y una excepción inesperada al conectar ahora muestra "Sin conexión", una explicación accionable y conserva el texto para reintentar.)*
 - [x] Escribir `setup_inicial.py`: detectar si Ollama o LM Studio están abiertos y descargar los modelos de voz al primer inicio, con barra de progreso. *(Preparación inyectable de Piper y Whisper, progreso visible y CLI `python -m app.setup_inicial`; las pruebas no usan red ni descargas reales.)*
 
-**Entregable:** versión beta lista para que otra persona la pruebe desde el código. **Estado: completa en código y pruebas (803 pruebas con pytest; 3 omitidas). Falta la prueba final de ventana completa e isla flotante con el usuario.**
+**Entregable:** versión beta lista para que otra persona la pruebe desde el código. **Estado: completa, probada en Windows con la ventana completa, layout responsive, estados, errores y la isla flotante (803 pruebas con pytest; 3 omitidas).**
 
 ### Fase 5B — Eva animada y con voz (semanas 8 y 9)
 
@@ -388,4 +388,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0, 1, 2, 3 y 4 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura, entiende lo que se le dice por micrófono y responde en voz alta con Piper. Sigue la Fase 5 (interfaz final).
+**Siguiente paso concreto:** las Fases 0, 1, 2, 3, 4 y 5 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura, entiende lo que se le dice por micrófono, responde en voz alta con Piper y tiene una interfaz responsive con isla flotante. Sigue la Fase 5B (Eva animada y con voz).
