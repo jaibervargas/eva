@@ -107,9 +107,9 @@ El plan dura 14 semanas (13 si se omite Docker) y se divide en 10 fases. Cada fa
 | 7 — Docker, opcional | 12 | `docker compose up` para servidores |
 | 8 — Pruebas, documentación y lanzamiento | 13–14 | Pruebas con pytest, README, pruebas con usuarios, versión 1.0 publicada |
 
-**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Con el bloque 2C, Eva también usa OpenAI, Claude, Gemini u OpenRouter con tu clave de API (guardada en el almacén seguro del sistema) o iniciando sesión con OpenRouter, y usa la nube como respaldo al extraer recuerdos. El bloque 2D ("Iniciar sesión con ChatGPT" con varias cuentas) está implementado y revisado; falta la prueba real con una cuenta Plus/Pro.
+**Estado actual:** Fases 0 y 1 completas con el modelo local (LM Studio). De la Fase 2 está hecho el bloque 2A (historial en SQLite, barra lateral de conversaciones y ajustes locales en `config.json`) y el bloque 2B (memoria a largo plazo con Engram: Eva recuerda tu nombre y tus gustos entre conversaciones distintas, y la pantalla **Recuerdos** permite verlos y borrarlos). Con el bloque 2C, Eva también usa OpenAI, Claude, Gemini u OpenRouter con tu clave de API (guardada en el almacén seguro del sistema) o iniciando sesión con OpenRouter, y usa la nube como respaldo al extraer recuerdos. Con el bloque 2D, Eva también usa tu plan de ChatGPT Plus/Pro ("Iniciar sesión con ChatGPT", con varias cuentas). La Fase 2 está completa.
 
-**Siguiente paso concreto:** prueba real del bloque 2D ("Iniciar sesión con ChatGPT", ya implementado) con una cuenta Plus/Pro; después, la Fase 3 (voz a texto).
+**Siguiente paso concreto:** Fase 3 (voz a texto).
 
 ## Instalación y ejecución
 

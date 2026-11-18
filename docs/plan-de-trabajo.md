@@ -1,6 +1,6 @@
 # Plan de trabajo – Eva, el asistente de IA de IDEVA
 
-Nov 16, 2026 · @Esperanza · actualizado el Nov 17, 2026 (bloque 2D implementado)
+Nov 16, 2026 · @Esperanza · actualizado el Nov 17, 2026 (Fase 2 terminada)
 
 ## 1. Resumen y objetivos
 
@@ -235,11 +235,11 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Antes de cada respuesta, buscar en Engram los recuerdos relacionados con la pregunta y agregarlos al contexto del modelo. *(Como Engram busca palabras completas, también se agregan los demás datos conocidos del usuario, hasta 8 recuerdos en total.)*
 - [x] Después de cada respuesta, guardar en Engram los datos importantes del usuario (nombre, gustos, decisiones). Si el modelo local no detecta bien qué guardar, usar el de la nube solo para esa tarea. *(El mismo modelo local extrae los datos en segundo plano, sin demorar el chat; si falla o su respuesta no se entiende, se reintenta una vez con el último modelo de la nube guardado en Ajustes.)*
 - [x] Agregar en ajustes una pantalla para ver y borrar recuerdos. *(Botón **Recuerdos** en la barra lateral: lista los recuerdos y borra cada uno para siempre, previa confirmación.)*
-- [ ] Implementar "Iniciar sesión con ChatGPT" en `auth.py` (OAuth con PKCE): la app abre el navegador, el usuario entra con su cuenta y la app usa su plan Plus o Pro. *(Bloque 2D: implementado y revisado, falta la prueba real con una cuenta Plus/Pro. Usa "Sign in with ChatGPT" (vista previa) con registro automático (`dynamic_agent_client` + `ext_agent_host_id`), sin pedir client ID; varias cuentas con selector; tokens en un archivo cifrado con la clave en `keyring`; el plan solo se usa con la Responses API. Si Eva se vendiera o se alojara en un servidor, habría que llenar el formulario de interés de OpenAI.)*
+- [x] Implementar "Iniciar sesión con ChatGPT" en `auth.py` (OAuth con PKCE): la app abre el navegador, el usuario entra con su cuenta y la app usa su plan Plus o Pro. *(Bloque 2D: implementado, revisado y probado con una cuenta Plus real. Usa "Sign in with ChatGPT" (vista previa) con registro automático (`dynamic_agent_client`), sin pedir client ID (el `ext_agent_host_id` queda apagado, como en el kit oficial de OpenAI, porque con él OpenAI rechazaba el canje); varias cuentas con selector; tokens en un archivo cifrado con la clave en `keyring`; el plan solo se usa con la Responses API. Si Eva se vendiera o se alojara en un servidor, habría que llenar el formulario de interés de OpenAI.)*
 - [x] Para Claude y Gemini, ofrecer clave de API o "Iniciar sesión con OpenRouter" (OAuth con PKCE, sin necesidad de registrar la app): el usuario entra con su cuenta de OpenRouter, la app recibe una clave ligada a esa cuenta y el usuario fija su propio límite de gasto. No se usa la suscripción Claude Pro/Max ni Google AI Pro, porque sus términos no lo permiten en apps de terceros.
 - [x] Guardar el token de la cuenta y las claves de API con la librería `keyring` (el almacén seguro del sistema operativo), nunca en texto plano dentro de `config.json`.
 
-**Entregable:** el asistente recuerda lo hablado, recuerda datos del usuario entre conversaciones distintas y se configura sin tocar archivos. **Estado: bloques 2A, 2B y 2C terminados y en `main`; bloque 2D implementado y revisado (670 pruebas con pytest), falta su prueba real con una cuenta Plus/Pro. La voz de los ajustes llega en la Fase 4.**
+**Entregable:** el asistente recuerda lo hablado, recuerda datos del usuario entre conversaciones distintas y se configura sin tocar archivos. **Estado: bloques 2A, 2B, 2C y 2D terminados, revisados y probados con cuentas reales (671 pruebas con pytest). Solo queda la voz de los ajustes, que llega en la Fase 4.**
 
 ### Fase 3 — Escuchar: voz a texto (semana 5)
 
@@ -345,4 +345,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0 y 1 están completas con el modelo local (LM Studio). De la Fase 2, los bloques 2A, 2B y 2C están terminados, revisados y en `main` (2C probado con una clave real de OpenAI); el bloque 2D ("Iniciar sesión con ChatGPT" con varias cuentas) está implementado y revisado en la rama `feat/fase-2d-chatgpt`. Falta su prueba real con una cuenta Plus/Pro y su PR; después sigue la Fase 3 (voz a texto).
+**Siguiente paso concreto:** las Fases 0, 1 y 2 están completas: Eva chatea con modelos locales (LM Studio u Ollama), con OpenAI, Claude, Gemini u OpenRouter (clave de API o cuenta) y con el plan de ChatGPT (varias cuentas), recuerda conversaciones y datos del usuario con Engram, y guarda claves y tokens de forma segura. Sigue la Fase 3 (voz a texto).
