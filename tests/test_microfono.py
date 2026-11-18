@@ -166,6 +166,7 @@ def test_first_click_checks_the_microphone_and_starts_recording_a_wav(monkeypatc
     assert vistos == [(ft.Icons.STOP, "Detener", True)]
     assert (boton.icon, boton.tooltip, boton.disabled) == (ft.Icons.STOP, "Detener", False)
     assert boton.icon_color == ROJO_ERROR
+    assert pantalla.estado.value == "Escuchando…"
     # Nothing typed can be sent while recording.
     assert pantalla.ocupado is True and pantalla.boton.disabled is True
     Path(grabador.rutas[0]).unlink()
@@ -180,6 +181,7 @@ def test_second_click_transcribes_off_the_ui_loop_and_sends_the_text(monkeypatch
 
     assert grabador.llamadas == ["permiso", "dispositivos", "empezar", "detener"]
     assert transcriptor.vistos == [("transcribir", [TRANSCRIBIENDO], True, True)]
+    assert pantalla.estado.value == "Listo"
     assert transcriptor.hilos[0] != threading.get_ident()
     assert transcriptor.rutas == grabador.rutas
     # Same path as typed text: user bubble, answer and history.

@@ -198,6 +198,44 @@ def test_settings_that_cannot_be_saved_keep_the_dialog_open(monkeypatch, datos):
 # ----- chat screen -----
 
 
+def test_responsive_shell_starts_with_full_layout_and_hides_panels_on_narrow_width(tmp_path):
+    page = FakePage()
+    page.width = 1280
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.vista()
+
+    assert pantalla.estado.value == "Listo"
+    assert pantalla.lateral.visible is True
+    assert pantalla.panel_eva.visible is True
+
+    page.width = 640
+    pantalla._ajustar_layout(None)
+    assert pantalla.lateral.visible is False
+    assert pantalla.panel_eva.visible is False
+
+
+def test_busy_state_is_visible_and_restores_ready_state(tmp_path):
+    page = FakePage()
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.vista()
+
+    pantalla._ocupar(True)
+    assert pantalla.estado.value == "Pensando…"
+    assert pantalla.estado.color == chat.GRIS_TEXTO
+
+    pantalla._ocupar(False)
+    assert pantalla.estado.value == "Listo"
+
+
+def test_connection_state_is_visible(tmp_path):
+    page = FakePage(ejecutar=False)
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.vista()
+
+    pantalla._conectar_en_segundo_plano()
+    assert pantalla.estado.value == "Conectando…"
+
+
 def test_a_turn_adopts_the_new_conversation_id(monkeypatch, tmp_path):
     _usar_servidor(monkeypatch, Servidor(models=["m"], chunks=[_chunk(content="Hola"), _chunk(content=" Ana")]))
     pantalla = _pantalla(tmp_path)
