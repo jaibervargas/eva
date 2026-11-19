@@ -297,3 +297,64 @@ def test_listen_button_is_attached_next_to_an_answer_with_an_avatar(tmp_path):
 
     fila = pantalla.mensajes.controls[0].content
     assert isinstance(fila.controls[-1], ft.IconButton)
+
+
+def test_marea_island_follows_the_reference_capsule(tmp_path):
+    """Drop, divider, the real state and a square button to come back."""
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    isla = pantalla.vista_isla()
+
+    piezas = _descendientes(isla)
+    iconos = [c.icon for c in piezas if isinstance(c, ft.Icon)]
+    assert ft.Icons.WATER_DROP in iconos
+    assert ft.Icons.AUTO_AWESOME not in iconos
+    # The capsule shows the state alone, not Eva's name repeated.
+    assert [t.value for t in piezas if isinstance(t, ft.Text)] == [pantalla.estado_isla.value]
+
+
+def test_marea_island_text_uses_the_capsule_typography(tmp_path):
+    """The reference state text is light and readable, not a small gray note."""
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    pantalla.vista_isla()
+
+    assert pantalla.estado_isla.size == 14
+    assert pantalla.estado_isla.color == DISENOS["marea"].texto
+    assert pantalla.estado_isla.weight == ft.FontWeight.W_500
+
+
+def test_idle_island_text_keeps_the_design_color(tmp_path):
+    """Going back to the idle label must not leave the gray status color."""
+    from app.ui.chat import LISTO
+
+    pantalla = _marea(tmp_path)
+    pantalla.vista_isla()
+
+    pantalla._poner_estado("Pensando…", "#A8C0CC")
+    pantalla._poner_estado(LISTO, "#A8C0CC")
+
+    assert pantalla.estado_isla.value == "Eva"
+    assert pantalla.estado_isla.color == DISENOS["marea"].texto
+
+
+def test_the_composer_swaps_the_field_for_the_recording_indicator(tmp_path):
+    pantalla = _marea(tmp_path)
+    pantalla._crear_composer()
+
+    pantalla.mostrar_grabacion(True)
+    assert pantalla.campo.visible is False
+    assert pantalla.indicador_grabacion.control.visible is True
+
+    pantalla.mostrar_grabacion(False)
+    assert pantalla.campo.visible is True
+    assert pantalla.indicador_grabacion.control.visible is False
+
+
+def test_the_recording_indicator_lives_inside_the_composer(tmp_path):
+    pantalla = _marea(tmp_path)
+    composer = pantalla._crear_composer()
+
+    assert pantalla.indicador_grabacion.control in _descendientes(composer)

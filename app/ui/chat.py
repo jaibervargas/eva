@@ -15,6 +15,7 @@ from app.secretos import ErrorSecretos, leer_clave
 from app.memory.history import Historial
 from app.ui.ajustes import DialogoAjustes
 from app.ui.disenos import DISENOS, EstadoInterfaz, diseno_valido, leer_diseno
+from app.ui.grabacion import IndicadorGrabacion
 from app.ui.microfono import Microfono
 from app.ui.recuerdos import DialogoRecuerdos
 from app.ui.reproductor import ESCUCHAR, NO_PUDE_LEER, VozEva, modo_valido
@@ -381,10 +382,15 @@ class PantallaChat:
     def _crear_composer(self) -> ft.Container:
         """One rounded box holding the field, the microphone and send."""
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        # While recording, this replaces the field in every design.
+        self.indicador_grabacion = IndicadorGrabacion(self.page, acento=tema.acento, texto=tema.texto)
         if self.diseno != "marea":
             self.boton.bgcolor = None
             self.campo.border = ft.OutlineInputBorder(border_radius=RADIO)
-            return ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=16)
+            return ft.Container(
+                ft.Row([self.campo, self.indicador_grabacion.control, self.microfono.boton, self.boton]),
+                padding=16,
+            )
         # A filled field would paint a box of its own inside the composer.
         self.campo.bgcolor = "#00000000"
         self.campo.filled = False
@@ -403,6 +409,7 @@ class PantallaChat:
             content=ft.Row(
                 [
                     self.campo,
+                    self.indicador_grabacion.control,
                     self.microfono.boton,
                     ft.Container(width=1, height=24, bgcolor="#1E4A58"),
                     self.boton,
@@ -466,6 +473,10 @@ class PantallaChat:
     def vista_isla(self) -> ft.Control:
         """Compact view used while the desktop window is minimized."""
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        # The capsule carries one line of text, so it reads at body size.
+        self.estado_isla.size = 14
+        self.estado_isla.weight = ft.FontWeight.W_500
+        self.estado_isla.color = tema.texto
         self._isla_surface = ft.Container(
             bgcolor=tema.fondo_chat,
             border=ft.Border.all(1, tema.acento),
@@ -473,11 +484,22 @@ class PantallaChat:
             padding=ft.Padding.symmetric(horizontal=16, vertical=6),
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.AUTO_AWESOME, color="#67E8F9", size=28),
-                    ft.Column([ft.Text("Eva", color=TEXTO, weight=ft.FontWeight.W_600), self.estado_isla], spacing=0, expand=True),
-                    ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip="Volver a la ventana", on_click=lambda e: self._restaurar_isla()),
+                    # The reference capsule: drop, divider, the real state and
+                    # a square button to come back to the window.
+                    ft.Icon(ft.Icons.WATER_DROP, color=tema.acento, size=26),
+                    ft.Container(width=1, height=22, bgcolor="#1E4A58"),
+                    ft.Container(expand=True, content=self.estado_isla),
+                    ft.IconButton(
+                        ft.Icons.CROP_SQUARE,
+                        tooltip="Volver a la ventana",
+                        icon_color=tema.texto,
+                        icon_size=18,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+                        on_click=lambda e: self._restaurar_isla(),
+                    ),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=10,
             ),
         )
         self._isla_control = ft.GestureDetector(
@@ -616,7 +638,10 @@ class PantallaChat:
         self.estado_panel.value = visible
         self.estado_panel.color = color
         self.estado_isla.value = "Eva" if texto == LISTO else texto
-        self.estado_isla.color = color
+        # At rest the capsule keeps the design's text color; a status color
+        # only applies while there is something to report.
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        self.estado_isla.color = tema.texto if texto == LISTO else color
 
     def _ocupar(self, ocupado: bool) -> None:
         with self._estado:
@@ -792,6 +817,14 @@ class PantallaChat:
         texto = ft.Text(mensaje, color=ROJO_ERROR, selectable=True)
         self._agregar(texto, de_usuario=False)
         self._error_conexion = self.mensajes.controls[-1]
+
+    def mostrar_grabacion(self, grabando: bool) -> None:
+        """Swap the writing field for the recording indicator, and back."""
+        indicador = getattr(self, "indicador_grabacion", None)
+        if indicador is None:
+            return
+        self.campo.visible = not grabando
+        indicador.iniciar() if grabando else indicador.detener()
 
     def mostrar_error(self, mensaje: str) -> None:
         """Show an error as a red bubble from Eva."""

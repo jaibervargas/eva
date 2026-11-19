@@ -143,7 +143,7 @@ def test_the_microphone_sits_next_to_the_send_button(monkeypatch, tmp_path):
     vista = pantalla.vista()
     fila = vista.controls[1].controls[1].content
 
-    assert fila.controls == [pantalla.campo, pantalla.microfono.boton, pantalla.boton]
+    assert fila.controls == [pantalla.campo, pantalla.indicador_grabacion.control, pantalla.microfono.boton, pantalla.boton]
     assert _en_reposo(pantalla)
 
 
@@ -414,3 +414,28 @@ def test_the_recording_notice_goes_away_when_stopping_fails(monkeypatch, tmp_pat
 
     assert GRABANDO not in [t.value for t in _textos(pantalla)]
     assert _en_reposo(pantalla)
+
+
+def test_the_composer_shows_the_recording_indicator_while_capturing(monkeypatch, tmp_path):
+    pantalla, _, _ = _pantalla(monkeypatch, tmp_path)
+    pantalla.vista()
+    pantalla.iniciar()
+
+    _clic(pantalla)
+    assert pantalla.campo.visible is False
+    assert pantalla.indicador_grabacion.control.visible is True
+
+    _clic(pantalla)
+    assert pantalla.campo.visible is True
+    assert pantalla.indicador_grabacion.control.visible is False
+
+
+def test_the_recording_indicator_goes_away_when_starting_fails(monkeypatch, tmp_path):
+    pantalla, _, _ = _pantalla(monkeypatch, tmp_path, grabador=GrabadorFalso(permiso=False))
+    pantalla.vista()
+    pantalla.iniciar()
+
+    _clic(pantalla)
+
+    assert pantalla.campo.visible is True
+    assert pantalla.indicador_grabacion.control.visible is False

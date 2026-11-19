@@ -107,6 +107,7 @@ class Microfono:
         self.grabando = False
         self._procesando = False
         self._ruta = None
+        self.pantalla.mostrar_grabacion(False)
         self._mostrar_detener(False)
         self.pantalla._ocupar(False)
         if error is not None:
@@ -139,6 +140,8 @@ class Microfono:
         self._ruta = ruta
         self.grabando = True
         self._procesando = False
+        # The composer reports the recording in place of the writing field.
+        self.pantalla.mostrar_grabacion(True)
         self._aviso_grabando = self.pantalla.mostrar_aviso(GRABANDO)
         self.pantalla._poner_estado("Escuchando…", ROJO)
         self.actualizar()
