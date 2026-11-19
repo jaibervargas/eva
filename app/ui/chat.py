@@ -181,6 +181,7 @@ class PantallaChat:
         else:
             self.campo.border = ft.OutlineInputBorder(border_radius=tema.radio, side=ft.BorderSide(1, tema.acento))
             self.boton.bgcolor = None
+            self.boton.style = None
             self.boton.icon_color = tema.acento
         if hasattr(self, "_isla_surface"):
             self._isla_surface.bgcolor = tema.fondo_chat
@@ -212,19 +213,7 @@ class PantallaChat:
             else ft.Icon(ft.Icons.AUTO_AWESOME, color=tema.acento, size=30)
         )
         nuevo = (
-            ft.TextButton(
-                "Nuevo chat",
-                icon=ft.Icons.ADD,
-                on_click=lambda e: self._nueva(),
-                width=ancho,
-                style=ft.ButtonStyle(
-                    color=tema.texto,
-                    bgcolor=tema.superficie_mensaje,
-                    shape=ft.RoundedRectangleBorder(radius=14),
-                    side=ft.BorderSide(1, "#1E4A58"),
-                    padding=ft.Padding.symmetric(horizontal=14, vertical=16),
-                ),
-            )
+            ft.TextButton("Nuevo chat", icon=ft.Icons.ADD, on_click=lambda e: self._nueva(), width=ancho)
             if marea
             else ft.FilledButton("Nueva conversación", icon=ft.Icons.ADD, on_click=lambda e: self._nueva(), width=ancho)
         )
@@ -238,11 +227,34 @@ class PantallaChat:
             self.boton_recuerdos,
         ]
         if marea:
-            # The reference lists Ajustes as a fourth menu option instead of a
-            # settings icon at the foot of the rail.
-            controles.append(ft.TextButton("Ajustes", icon=ft.Icons.SETTINGS, on_click=lambda e: self._abrir_ajustes()))
+            ajustes = ft.TextButton("Ajustes", icon=ft.Icons.SETTINGS, on_click=lambda e: self._abrir_ajustes())
+            # Every option shares one style; hovering outlines it like a card.
+            # One shared instance, so rebuilding the rail never leaves the
+            # reused Recuerdos button on an older style.
+            estilo = self._estilo_menu_marea = getattr(self, "_estilo_menu_marea", None) or ft.ButtonStyle(
+                color=tema.texto,
+                alignment=ft.Alignment.CENTER_LEFT,
+                padding=ft.Padding.symmetric(horizontal=14, vertical=16),
+                shape=ft.RoundedRectangleBorder(radius=12),
+                # Without an explicit default the theme fills the button dark.
+                bgcolor={ft.ControlState.DEFAULT: "#00000000", ft.ControlState.HOVERED: tema.superficie_mensaje},
+                side={ft.ControlState.DEFAULT: ft.BorderSide(0, "#00000000"), ft.ControlState.HOVERED: ft.BorderSide(1, tema.acento)},
+                overlay_color="#00000000",
+            )
+            for boton in [*controles[1:], ajustes]:
+                boton.style = estilo
+                boton.width = ancho
+            # Breathing room between the Eva mark and the options, with Ajustes
+            # resting at the foot of the rail.
+            controles.insert(1, ft.Container(height=14))
             controles.append(ft.Container(expand=True))
-            return ft.Container(width=ancho, bgcolor=tema.fondo_lateral, padding=16, content=ft.Column(controles, expand=True, spacing=6))
+            controles.append(ajustes)
+            return ft.Container(
+                width=ancho,
+                bgcolor=tema.fondo_lateral,
+                padding=ft.Padding.only(left=14, right=14, top=20, bottom=16),
+                content=ft.Column(controles, expand=True, spacing=6),
+            )
         if incluir_historial:
             controles.extend([ft.Text("Conversaciones", size=12, color=tema.texto), self.lista])
         controles.extend(
@@ -354,7 +366,8 @@ class PantallaChat:
                 on_pan_start=lambda e: self.page.window.start_dragging(),
             )
             return ft.Container(
-                bgcolor=tema.fondo_chat,
+                bgcolor=tema.fondo_lateral,
+                border=ft.Border.only(bottom=ft.BorderSide(1, "#193844")),
                 content=ft.Row([libre, self._controles_ventana_marea()], vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 height=44,
                 padding=ft.Padding.only(left=12, right=10),
@@ -372,12 +385,18 @@ class PantallaChat:
             self.boton.bgcolor = None
             self.campo.border = ft.OutlineInputBorder(border_radius=RADIO)
             return ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=16)
+        # A filled field would paint a box of its own inside the composer.
+        self.campo.bgcolor = "#00000000"
+        self.campo.filled = False
+        self.campo.content_padding = ft.Padding.symmetric(horizontal=4, vertical=14)
         self.campo.border = ft.NoInputBorder()
         self.boton.bgcolor = tema.acento
         self.boton.icon_color = tema.fondo_chat
+        # The reference send button is a rounded square, not a circle.
+        self.boton.style = ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10))
         return ft.Container(
             margin=ft.Margin.only(left=16, right=16, bottom=16),
-            padding=ft.Padding.only(left=18, right=8, top=2, bottom=2),
+            padding=ft.Padding.only(left=18, right=10, top=4, bottom=4),
             bgcolor=tema.superficie_mensaje,
             border=ft.Border.all(1, tema.acento),
             border_radius=16,
@@ -413,7 +432,7 @@ class PantallaChat:
             self.pestanas.controls.append(ft.TextButton(resumen.titulo, on_click=lambda e, cid=resumen.id: self._abrir(cid)))
         return self.pestanas
 
-    def _construir_layout(self) -> ft.Row:
+    def _construir_layout(self) -> ft.Control:
         clave = self.diseno or "brisa"
         barra = self._crear_barra()
         composer = self._crear_composer()
@@ -421,8 +440,11 @@ class PantallaChat:
             self.lateral = self._crear_menu(210, incluir_historial=False)
             historial = self._crear_historial_marea()
             self.panel_eva = None
-            chat = ft.Column([ft.Column([barra, self.mensajes], expand=True), composer], expand=True)
-            return ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
+            chat = ft.Column([self.mensajes, composer], expand=True)
+            # The title bar crosses the whole window; menu, history and chat
+            # sit below it, as in the reference.
+            cuerpo = ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
+            return ft.Column([barra, cuerpo], expand=True, spacing=0)
         self.lateral = self._crear_menu(ANCHO_LATERAL)
         self.panel_eva = self._crear_panel_eva()
         if clave == "horizonte":
@@ -781,9 +803,18 @@ class PantallaChat:
         self._agregar(aviso, de_usuario=False)
         return aviso
 
-    def quitar_aviso(self, aviso: ft.Text) -> None:
+    @staticmethod
+    def _contiene(burbuja: ft.Control, texto: ft.Text) -> bool:
+        """Whether a bubble row holds ``texto``, whatever precedes its balloon.
+
+        Eva's rows start with an avatar, which has no ``content``, so the
+        balloon cannot be addressed by position.
+        """
         # By identity: Flet controls compare equal by value.
-        self.mensajes.controls = [c for c in self.mensajes.controls if c.content.controls[0].content is not aviso]
+        return any(getattr(c, "content", None) is texto for c in burbuja.content.controls)
+
+    def quitar_aviso(self, aviso: ft.Text) -> None:
+        self.mensajes.controls = [c for c in self.mensajes.controls if not self._contiene(c, aviso)]
 
     def _quitar_error_conexion(self) -> None:
         if self._error_conexion is not None:
@@ -886,8 +917,7 @@ class PantallaChat:
             return
         for burbuja in self.mensajes.controls:
             fila = burbuja.content
-            # By identity: Flet controls compare equal by value.
-            if fila.controls[0].content is respuesta and len(fila.controls) == 1:
+            if self._contiene(burbuja, respuesta) and not any(isinstance(c, ft.IconButton) for c in fila.controls):
                 fila.controls.append(boton)
                 return
 

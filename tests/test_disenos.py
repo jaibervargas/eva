@@ -142,3 +142,158 @@ def test_marea_avatar_is_not_the_white_backed_image(tmp_path):
     menu = pantalla._crear_menu(210, incluir_historial=False)
 
     assert not [c for c in _descendientes(menu) if isinstance(c, ft.Image)]
+
+
+def test_marea_title_bar_spans_the_whole_window(tmp_path):
+    """In the reference the bar crosses the top; menu and history sit below."""
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    shell = pantalla._construir_layout()
+
+    assert isinstance(shell, ft.Column)
+    barra, cuerpo = shell.controls
+    assert barra.height == 44
+    assert isinstance(cuerpo, ft.Row)
+    assert pantalla.lateral in cuerpo.controls
+
+
+def test_marea_menu_labels_use_the_design_text_color(tmp_path):
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    menu = pantalla._crear_menu(210, incluir_historial=False)
+
+    botones = [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
+    assert botones
+    assert all(b.style is not None and b.style.color == DISENOS["marea"].texto for b in botones)
+
+
+def test_marea_send_button_is_a_rounded_square(tmp_path):
+    pantalla = _marea(tmp_path)
+    pantalla._crear_composer()
+
+    assert pantalla.boton.style is not None
+    assert isinstance(pantalla.boton.style.shape, __import__("flet").RoundedRectangleBorder)
+
+
+def test_marea_title_bar_is_separated_from_the_chat(tmp_path):
+    """The reference bar has its own tone and a line along its bottom."""
+    pantalla = _marea(tmp_path)
+    barra = pantalla._crear_barra()
+
+    assert barra.bgcolor != DISENOS["marea"].fondo_chat
+    assert barra.border is not None and barra.border.bottom is not None
+
+
+def test_marea_menu_options_are_left_aligned(tmp_path):
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    menu = pantalla._crear_menu(210, incluir_historial=False)
+
+    botones = [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
+    assert botones
+    assert all(b.style.alignment == ft.Alignment.CENTER_LEFT for b in botones)
+
+
+def test_marea_composer_field_has_no_tone_of_its_own(tmp_path):
+    """A filled field paints a cut-looking box inside the composer."""
+    pantalla = _marea(tmp_path)
+    pantalla._crear_composer()
+
+    assert pantalla.campo.bgcolor == "#00000000"
+
+
+def _botones_menu(pantalla):
+    import flet as ft
+
+    menu = pantalla._crear_menu(210, incluir_historial=False)
+    return menu, [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
+
+
+def test_marea_settings_sits_at_the_foot_of_the_menu(tmp_path):
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    menu, _ = _botones_menu(pantalla)
+    columna = menu.content
+
+    ultimo = columna.controls[-1]
+    assert isinstance(ultimo, ft.TextButton) and ultimo.content == "Ajustes"
+    assert any(getattr(c, "expand", False) for c in columna.controls[:-1])
+
+
+def test_marea_new_chat_looks_like_the_other_options(tmp_path):
+    pantalla = _marea(tmp_path)
+    _, botones = _botones_menu(pantalla)
+
+    estilos = {id(b.style) for b in botones}
+    assert len(estilos) == 1
+
+
+def test_marea_menu_options_show_a_border_on_hover(tmp_path):
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    _, botones = _botones_menu(pantalla)
+
+    lado = botones[0].style.side
+    assert isinstance(lado, dict) and ft.ControlState.HOVERED in lado
+
+
+def test_marea_menu_options_are_transparent_when_idle(tmp_path):
+    """Giving only a hover color leaves the theme's dark fill at rest."""
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    _, botones = _botones_menu(pantalla)
+
+    fondo = botones[0].style.bgcolor
+    assert fondo[ft.ControlState.DEFAULT] == "#00000000"
+
+
+def test_removing_a_status_bubble_works_with_an_avatar(tmp_path):
+    """Eva's bubbles carry an avatar first, which has no content attribute."""
+    pantalla = _marea(tmp_path)
+    aviso = pantalla.mostrar_aviso("Grabando…")
+    assert len(pantalla.mensajes.controls) == 1
+
+    pantalla.quitar_aviso(aviso)
+
+    assert pantalla.mensajes.controls == []
+
+
+def test_status_bubble_with_a_real_avatar_can_be_removed(tmp_path):
+    """The live app puts an Image first, which has no content attribute."""
+    import flet as ft
+
+    from app.ui.chat import _burbuja
+
+    pantalla = _marea(tmp_path)
+    aviso = ft.Text("Grabando…")
+    pantalla.mensajes.controls.append(
+        _burbuja(aviso, de_usuario=False, avatar=ft.Image(src="x.png", width=34, height=34))
+    )
+
+    pantalla.quitar_aviso(aviso)
+
+    assert pantalla.mensajes.controls == []
+
+
+def test_listen_button_is_attached_next_to_an_answer_with_an_avatar(tmp_path):
+    import flet as ft
+
+    from app.ui.chat import _burbuja
+
+    pantalla = _marea(tmp_path)
+    respuesta = ft.Text("respuesta")
+    pantalla.mensajes.controls.append(
+        _burbuja(respuesta, de_usuario=False, avatar=ft.Image(src="x.png", width=34, height=34))
+    )
+    pantalla._boton_escuchar = lambda r: ft.IconButton(icon=ft.Icons.VOLUME_UP)
+
+    pantalla._agregar_escuchar(respuesta)
+
+    fila = pantalla.mensajes.controls[0].content
+    assert isinstance(fila.controls[-1], ft.IconButton)
