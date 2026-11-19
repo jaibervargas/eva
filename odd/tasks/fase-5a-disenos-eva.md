@@ -22,7 +22,7 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - T1 [S1, S2] shared UI state, design catalog, persistence and chooser — done (L4; 808 passed, 3 skipped)
 - T2 [S3] Brisa, Marea and Horizonte layouts — done (L5; 808 passed, 3 skipped)
 - T3 [S4] fullscreen/medium/island integration per design — done (L6; 808 passed, 3 skipped)
-- T4 [S5, S6] tests, docs, captures and Windows validation — pending
+- T4 [S5, S6] tests, docs, captures and Windows validation — in progress (L7, L8)
 - T5 [S1-S6] review, PR and delivery — pending
 
 ## Log
@@ -32,4 +32,6 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - L3 (decision): User approved implementation and asked to add it to the work plan as Phase 5A: "si me parece de paso agrega estos cambios en el pland e trabajo como fase 5A".
 - L4 (T1 verification): Added `app/ui/disenos.py` with the three structural design tokens, nested preference helpers, shared `EstadoInterfaz`, and first-run `SelectorDiseno`; wired selection into `app/main.py` and the live chat theme. Focused tests: 48 passed. Full suite: 808 passed, 3 skipped.
 - L5 (T2 verification): Added structural layout branches in `PantallaChat`: Brisa uses one history rail, Marea uses menu plus a separate history column, and Horizonte uses real-conversation tabs. Focused layout/regression tests: 66 passed. Full suite: 808 passed, 3 skipped. Unsupported Favorites and fake task cards remain omitted.
+- L8 (T4, window fixes): Added `Ajustes → Apariencia` with preview/apply/cancel and the Marea custom chrome (`0c2ba1f`), then fixed the dynamic island reached from the Windows taskbar icon (`d9341c2`). Live logging showed three separate defects: the taskbar click only emits `MINIMIZE`, so the island never toggled back; `activar()` recorded the geometry Windows reports while minimized (`w=160 h=28 left=-32000 top=-32000`) and restored the chat off-screen; and un-minimizing made Windows impose the previous size (`w=1280 h=720`) over the island, which showed a full-size flash. Each defect was reproduced RED first in `tests/test_isla.py` (9 adapter tests). Full suite: 816 passed, 3 skipped. User confirmed live: island toggles from the taskbar icon and no longer flashes.
+- L7 (user): "mira en el icono que aparece en el menu de windows ahora si le doy clic esconde la vista ahi bien pero si le vuelvo a dar clic para abrirlo lo la abre" and "en un momento seve la isla grande y se minimiza al tamaño correcto".
 - L6 (T3 verification): Updated `IslaFlotante` to a 300×56 capsule, centered relative to the prior window near the top edge, preserving and restoring size, position and normal window properties. Focused window checks: 12 passed. Full suite: 808 passed, 3 skipped.
