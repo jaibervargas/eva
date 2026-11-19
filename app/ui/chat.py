@@ -133,8 +133,8 @@ class PantallaChat:
         # Sidebar
         self.lista = ft.ListView(expand=True, spacing=2)
         self.lista_historial = ft.ListView(expand=True, spacing=2)
-        # Marea shows the history column beside the menu from the start.
-        self.historial_visible = diseno_valido(leer_diseno(config)) == "marea"
+        # Every design shows the history column beside the rail from the start.
+        self.historial_visible = True
         self.pestanas = ft.Row(scroll=ft.ScrollMode.AUTO, spacing=4)
         self.etiqueta_modelo = ft.Text("", size=12, color=GRIS_TEXTO, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         # Discreet note under the model label; hidden while memory works.
@@ -174,7 +174,6 @@ class PantallaChat:
         self.campo.bgcolor = tema.fondo_chat
         # Every design draws field, microphone and send inside one box, so the
         # composer owns their colors and borders.
-        self.historial_visible = self.historial_visible or clave == "marea"
         if hasattr(self, "_isla_surface"):
             self._isla_surface.bgcolor = tema.fondo_chat
             self._isla_surface.border = ft.Border.all(1, tema.acento)
@@ -216,8 +215,12 @@ class PantallaChat:
             )
         return guardado[tema.id]
 
-    def _crear_menu(self, ancho: int, incluir_historial: bool = True) -> ft.Container:
-        """The rail every design shares: mark, options, and Ajustes at the foot."""
+    def _crear_menu(self, ancho: int) -> ft.Container:
+        """The rail every design shares: mark, options, and Ajustes at the foot.
+
+        Conversations are not listed here: every design opens them in the
+        history column, which the Historial option shows and hides.
+        """
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
         # The seed PNG carries a white background, which paints a box on both
         # the dark and the aqua rail, so the mark is drawn as an icon.
@@ -237,13 +240,7 @@ class PantallaChat:
             ft.Container(height=14),
             *opciones,
         ]
-        if incluir_historial:
-            # Designs without a separate history column list conversations here.
-            controles.append(ft.Container(height=10))
-            controles.append(ft.Text("Conversaciones", size=12, color=tema.texto))
-            controles.append(self.lista)
-        else:
-            controles.append(ft.Container(expand=True))
+        controles.append(ft.Container(expand=True))
         controles.append(ft.Container(ft.Column([self.etiqueta_modelo, self.nota_memoria], spacing=2, tight=True), padding=ft.Padding.only(left=6, bottom=6)))
         controles.append(ajustes)
         return ft.Container(
@@ -267,19 +264,22 @@ class PantallaChat:
         except (TypeError, ValueError):
             return ""
 
-    def _filas_marea(self) -> list[ft.Control]:
-        tema = DISENOS["marea"]
+    def _filas_historial(self) -> list[ft.Control]:
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
         filas = []
         datos = self.historial.listar_conversaciones_con_fecha()
         for cid, titulo, fecha in datos:
             activo = cid == self.conversacion_id
             indicador = ft.Container(width=3, bgcolor=tema.acento if activo else "#00000000", border_radius=2)
+            atenuado = "#A8C0CC" if tema.id == "marea" else "#5A7B88"
+            separador = "#15323D" if tema.id == "marea" else "#CBE4EA"
+            globo = ft.Icon(ft.Icons.CHAT_BUBBLE_OUTLINE, size=16, color=tema.acento if activo else atenuado)
             fila = ft.Container(
                 content=ft.Row(
-                    [indicador, ft.Column([ft.Text(titulo, color=tema.texto, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS), ft.Text(self._fecha_corta(fecha), color="#A8C0CC", size=12)], spacing=2, expand=True)],
+                    [indicador, globo, ft.Column([ft.Text(titulo, color=tema.texto, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS), ft.Text(self._fecha_corta(fecha), color=atenuado, size=12)], spacing=2, expand=True)],
                     spacing=8,
                 ),
-                bgcolor="#103742" if activo else None,
+                bgcolor=tema.superficie_mensaje if activo else None,
                 border_radius=10,
                 padding=ft.Padding.symmetric(horizontal=8, vertical=9),
                 tooltip=titulo,
@@ -287,18 +287,18 @@ class PantallaChat:
             )
             filas.append(fila)
             if (cid, titulo, fecha) != datos[-1]:
-                filas.append(ft.Container(height=1, bgcolor="#15323D", margin=ft.Margin.symmetric(horizontal=10)))
+                filas.append(ft.Container(height=1, bgcolor=separador, margin=ft.Margin.symmetric(horizontal=10)))
         return filas
 
-    def _crear_historial_marea(self) -> ft.Container:
-        tema = DISENOS["marea"]
-        self.lista_historial.controls = self._filas_marea()
+    def _crear_columna_historial(self) -> ft.Container:
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        self.lista_historial.controls = self._filas_historial()
         self.historial_marea = ft.Container(
             width=258,
             visible=self.historial_visible,
             bgcolor=tema.fondo_historial,
             padding=14,
-            border=ft.Border.only(right=ft.BorderSide(1, "#193844")),
+            border=ft.Border.only(right=ft.BorderSide(1, "#193844" if tema.id == "marea" else "#CBE4EA")),
             content=ft.Column(
                 [
                     ft.Container(
@@ -423,9 +423,10 @@ class PantallaChat:
         clave = self.diseno or "brisa"
         barra = self._crear_barra()
         composer = self._crear_composer()
+        # Every design pairs the rail with the history column it toggles.
+        historial = self._crear_columna_historial()
         if clave == "marea":
-            self.lateral = self._crear_menu(210, incluir_historial=False)
-            historial = self._crear_historial_marea()
+            self.lateral = self._crear_menu(ANCHO_LATERAL)
             self.panel_eva = None
             chat = ft.Column([self.mensajes, composer], expand=True)
             # The title bar crosses the whole window; menu, history and chat
@@ -433,14 +434,13 @@ class PantallaChat:
             cuerpo = ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
             return ft.Column([barra, cuerpo], expand=True, spacing=0)
         self.lateral = self._crear_menu(ANCHO_LATERAL)
-        self.panel_eva = self._crear_panel_eva()
+        self.panel_eva = None
         if clave == "horizonte":
             cabecera = ft.Column([self._crear_tabs_horizonte(), barra], tight=True)
             chat = ft.Column([ft.Column([cabecera, self.mensajes], expand=True), composer], expand=True)
-            return ft.Row([self.lateral, chat], expand=True, spacing=0)
-        self.panel_eva = None
+            return ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
         chat = ft.Column([ft.Column([barra, self.mensajes], expand=True), composer], expand=True)
-        return ft.Row([self.lateral, chat], expand=True, spacing=0)
+        return ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
 
     def vista(self) -> ft.Control:
         self._shell = ft.Container(expand=True, content=self._construir_layout())
@@ -505,9 +505,10 @@ class PantallaChat:
             ancho = 1200
         compacto = ancho < 900
         movil = ancho < 680
-        if self.diseno == "marea" and hasattr(self, "historial_marea"):
+        # Rail and history column behave the same in every design.
+        if hasattr(self, "historial_marea") and self.lateral is not None:
             estrecho = ancho < 900
-            self.lateral.width = 165 if estrecho else 210
+            self.lateral.width = 200 if estrecho else ANCHO_LATERAL
             self.historial_marea.width = 190 if estrecho else 258
             self.lateral.visible = ancho >= 720
             self.historial_marea.visible = self.historial_visible and ancho >= 720
@@ -738,7 +739,7 @@ class PantallaChat:
             )
 
         self.lista.controls = [fila(c) for c in conversaciones]
-        self.lista_historial.controls = self._filas_marea() if self.diseno == "marea" else [fila(c) for c in conversaciones]
+        self.lista_historial.controls = self._filas_historial()
         if self.diseno == "horizonte":
             self._crear_tabs_horizonte()
 

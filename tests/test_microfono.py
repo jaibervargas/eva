@@ -141,7 +141,7 @@ def _ultimo_error(pantalla):
 def test_the_microphone_sits_next_to_the_send_button(monkeypatch, tmp_path):
     pantalla, _, _ = _pantalla(monkeypatch, tmp_path)
     vista = pantalla.vista()
-    fila = vista.content.controls[1].controls[1].content
+    fila = pantalla._crear_composer().content
 
     # The composer is one box: field, recording indicator, microphone,
     # a divider and send.

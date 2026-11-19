@@ -108,7 +108,7 @@ def test_marea_menu_lists_settings_as_an_option(tmp_path):
     import flet as ft
 
     pantalla = _marea(tmp_path)
-    menu = pantalla._crear_menu(210, incluir_historial=False)
+    menu = pantalla._crear_menu(210)
 
     etiquetas = [c.content for c in _descendientes(menu) if isinstance(c, (ft.TextButton, ft.FilledButton))]
     assert "Ajustes" in etiquetas
@@ -139,7 +139,7 @@ def test_marea_avatar_is_not_the_white_backed_image(tmp_path):
     import flet as ft
 
     pantalla = _marea(tmp_path)
-    menu = pantalla._crear_menu(210, incluir_historial=False)
+    menu = pantalla._crear_menu(210)
 
     assert not [c for c in _descendientes(menu) if isinstance(c, ft.Image)]
 
@@ -162,7 +162,7 @@ def test_marea_menu_labels_use_the_design_text_color(tmp_path):
     import flet as ft
 
     pantalla = _marea(tmp_path)
-    menu = pantalla._crear_menu(210, incluir_historial=False)
+    menu = pantalla._crear_menu(210)
 
     botones = [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
     assert botones
@@ -190,7 +190,7 @@ def test_marea_menu_options_are_left_aligned(tmp_path):
     import flet as ft
 
     pantalla = _marea(tmp_path)
-    menu = pantalla._crear_menu(210, incluir_historial=False)
+    menu = pantalla._crear_menu(210)
 
     botones = [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
     assert botones
@@ -208,7 +208,7 @@ def test_marea_composer_field_has_no_tone_of_its_own(tmp_path):
 def _botones_menu(pantalla):
     import flet as ft
 
-    menu = pantalla._crear_menu(210, incluir_historial=False)
+    menu = pantalla._crear_menu(210)
     return menu, [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
 
 
@@ -427,7 +427,7 @@ def test_every_design_shares_the_marea_menu_distribution(tmp_path):
     for clave, hacer in (("brisa", _brisa), ("marea", _marea)):
         pantalla = hacer(tmp_path / clave if False else tmp_path)
         pantalla.aplicar_diseno(clave)
-        menu = pantalla._crear_menu(220, incluir_historial=clave != "marea")
+        menu = pantalla._crear_menu(220)
         columna = menu.content
         botones = [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
 
@@ -477,3 +477,76 @@ def test_conversation_rows_carry_the_speech_bubble_icon(tmp_path):
     # The open conversation stands out in the accent.
     assert fila.leading.color == DISENOS["brisa"].acento
     assert fila.title.color == DISENOS["brisa"].acento
+
+
+def test_the_rail_no_longer_lists_conversations(tmp_path):
+    for clave, hacer in (("brisa", _brisa), ("marea", _marea)):
+        pantalla = hacer(tmp_path)
+        pantalla.aplicar_diseno(clave)
+        menu = pantalla._crear_menu(220)
+
+        assert pantalla.lista not in _descendientes(menu), clave
+
+
+def test_every_design_uses_the_history_column(tmp_path):
+    for clave, hacer in (("brisa", _brisa), ("marea", _marea)):
+        pantalla = hacer(tmp_path)
+        pantalla.aplicar_diseno(clave)
+        shell = pantalla.vista()
+
+        piezas = _descendientes(shell)
+        assert pantalla.historial_marea in piezas, clave
+        assert pantalla.lista_historial in piezas, clave
+        assert pantalla.historial_marea.bgcolor == DISENOS[clave].fondo_historial, clave
+
+
+def test_the_history_column_toggles_in_every_design(tmp_path):
+    pantalla = _brisa(tmp_path)
+    visible = pantalla.historial_marea.visible
+
+    pantalla._alternar_historial()
+
+    assert pantalla.historial_marea.visible is not visible
+
+
+def test_the_rail_has_the_same_width_in_every_design(tmp_path):
+    from app.ui.chat import ANCHO_LATERAL
+
+    for clave, hacer in (("brisa", _brisa), ("marea", _marea)):
+        pantalla = hacer(tmp_path)
+        pantalla.aplicar_diseno(clave)
+        pantalla.vista()
+
+        assert pantalla.lateral.width == ANCHO_LATERAL, clave
+
+
+def test_history_rows_carry_the_speech_bubble_icon(tmp_path):
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    cid = pantalla.historial.crear_conversacion("una charla")
+    pantalla.conversacion_id = cid
+    filas = pantalla._filas_historial()
+
+    iconos = [c for c in _descendientes(filas[0]) if isinstance(c, ft.Icon)]
+    assert iconos and iconos[0].icon == ft.Icons.CHAT_BUBBLE_OUTLINE
+    assert iconos[0].color == DISENOS["marea"].acento
+
+
+def test_narrow_windows_collapse_the_panels_in_every_design(tmp_path):
+    from app.ui.chat import ANCHO_LATERAL
+
+    for clave, hacer in (("brisa", _brisa), ("marea", _marea)):
+        pantalla = hacer(tmp_path)
+        pantalla.aplicar_diseno(clave)
+        pantalla.vista()
+
+        pantalla.page.width = 1200
+        pantalla._ajustar_layout(None)
+        assert pantalla.lateral.width == ANCHO_LATERAL, clave
+        assert pantalla.historial_marea.visible is True, clave
+
+        pantalla.page.width = 700
+        pantalla._ajustar_layout(None)
+        assert pantalla.lateral.width < ANCHO_LATERAL, clave
+        assert pantalla.historial_marea.visible is False, clave
