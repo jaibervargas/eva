@@ -105,19 +105,30 @@ def guardar_diseno(config: Config, diseno: str) -> None:
 class SelectorDiseno:
     """First-run design chooser; layout previews use the real catalog tokens."""
 
-    def __init__(self, page: ft.Page, config: Config, al_aplicar) -> None:
+    def __init__(
+        self,
+        page: ft.Page,
+        config: Config,
+        al_aplicar,
+        al_preview=None,
+        permite_cancelar: bool = False,
+    ) -> None:
         self.page = page
         self.config = config
         self.al_aplicar = al_aplicar
-        self.seleccion: str | None = leer_diseno(config)
+        self.al_preview = al_preview or (lambda clave: None)
+        self._original = leer_diseno(config)
+        self.seleccion: str | None = self._original
         self.tarjetas: dict[str, ft.Container] = {}
+        acciones = [ft.TextButton("Cancelar", on_click=self._cancelar)] if permite_cancelar else []
+        acciones.append(ft.FilledButton("Usar este diseño", on_click=self._aplicar, disabled=self.seleccion is None))
         self.dialogo = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Elige el diseño de Eva"),
+            title=ft.Text("Apariencia" if permite_cancelar else "Elige el diseño de Eva"),
             content=ft.Column(self._crear_tarjetas(), tight=True, width=620, scroll=ft.ScrollMode.AUTO),
-            actions=[ft.FilledButton("Usar este diseño", on_click=self._aplicar, disabled=True)],
+            actions=acciones,
         )
-        self.boton_aplicar = self.dialogo.actions[0]
+        self.boton_aplicar = acciones[-1]
 
     def _crear_tarjetas(self) -> list[ft.Control]:
         tarjetas = []
@@ -162,9 +173,15 @@ class SelectorDiseno:
     def _seleccionar(self, clave: str) -> None:
         self.seleccion = clave
         self.boton_aplicar.disabled = False
+        self.al_preview(clave)
         for nombre, tarjeta in self.tarjetas.items():
             tarjeta.bgcolor = DISENOS[nombre].superficie_mensaje if nombre == clave else None
         self.page.update()
+
+    def _cancelar(self, e) -> None:
+        self.page.pop_dialog()
+        if self._original is not None:
+            self.al_preview(self._original)
 
     def _aplicar(self, e) -> None:
         if self.seleccion is None:

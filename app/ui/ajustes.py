@@ -10,6 +10,7 @@ Eva's voice and when she answers aloud are saved in ``config.json`` as
 
 import logging
 import threading
+from copy import deepcopy
 from collections.abc import Callable
 
 import flet as ft
@@ -20,6 +21,7 @@ from app.llm.base import ErrorLLM
 from app.llm.cloud_client import crear_cliente
 from app.llm.local_client import ClienteLocal
 from app.secretos import ErrorSecretos, borrar_clave, guardar_clave, leer_clave
+from app.ui.disenos import SelectorDiseno, leer_diseno
 from app.ui.panel_chatgpt import PanelChatGPT
 from app.ui.reproductor import MODO_POR_DEFECTO, MODOS, PRUEBA, VozEva, modo_valido
 from app.voice.stt import ErrorVoz
@@ -46,11 +48,13 @@ class DialogoAjustes:
         config: Config,
         al_guardar: Callable[[Config], None],
         voz: VozEva | None = None,
+        al_apariencia: Callable[[Config], None] | None = None,
     ) -> None:
         self.page = page
         self.config = config
         self.al_guardar = al_guardar
         self.voz = voz  # reads the "Probar voz" sample; None disables the button
+        self.al_apariencia = al_apariencia or (lambda config: None)
         self._inicio_sesion: threading.Event | None = None  # set while signing in
 
         self.proveedor = ft.Dropdown(
@@ -94,6 +98,7 @@ class DialogoAjustes:
             expand=True,
         )
         self.estado_voz = ft.Text("", size=12, color=GRIS_TEXTO, selectable=True)
+        self.boton_apariencia = ft.OutlinedButton("Apariencia", on_click=self._abrir_apariencia)
         self.dialogo = ft.AlertDialog(
             modal=True,
             title=ft.Text("Ajustes"),
@@ -116,6 +121,7 @@ class DialogoAjustes:
                     ft.Divider(height=1),
                     ft.Row([self.voz_eva, self.boton_probar]),
                     ft.Row([self.responder]),
+                    ft.Row([self.boton_apariencia]),
                     self.estado_voz,
                 ],
                 tight=True,
@@ -128,6 +134,22 @@ class DialogoAjustes:
     def abrir(self) -> None:
         self.page.show_dialog(self.dialogo)
         self._cargar_modelos()
+
+    def _abrir_apariencia(self, e) -> None:
+        SelectorDiseno(
+            self.page,
+            self.config,
+            lambda diseno: self.al_apariencia(self.config),
+            al_preview=lambda diseno: self.al_apariencia(self._config_con_diseno(diseno)),
+            permite_cancelar=True,
+        ).abrir()
+
+    def _config_con_diseno(self, diseno: str) -> Config:
+        temporal = Config(self.config.proveedor, self.config.modelo, deepcopy(self.config.extras))
+        from app.ui.disenos import guardar_diseno
+
+        guardar_diseno(temporal, diseno)
+        return temporal
 
     def _es_nube(self, proveedor: str | None = None) -> bool:
         return PROVEEDORES[proveedor or self.proveedor.value].nube

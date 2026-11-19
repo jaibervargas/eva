@@ -204,14 +204,14 @@ def test_responsive_shell_starts_with_full_layout_and_hides_panels_on_narrow_wid
     pantalla = _pantalla(tmp_path, page)
     pantalla.vista()
 
-    assert pantalla.estado.value == "Listo"
+    assert pantalla.estado.value == ""
     assert pantalla.lateral.visible is True
-    assert pantalla.panel_eva.visible is True
+    # Brisa follows its reference: one sidebar and no right context panel.
+    assert pantalla.panel_eva is None
 
     page.width = 640
     pantalla._ajustar_layout(None)
     assert pantalla.lateral.visible is False
-    assert pantalla.panel_eva.visible is False
 
 
 def test_busy_state_is_visible_and_restores_ready_state(tmp_path):
@@ -224,7 +224,7 @@ def test_busy_state_is_visible_and_restores_ready_state(tmp_path):
     assert pantalla.estado.color == chat.GRIS_TEXTO
 
     pantalla._ocupar(False)
-    assert pantalla.estado.value == "Listo"
+    assert pantalla.estado.value == ""
 
 
 def test_connection_state_is_visible(tmp_path):

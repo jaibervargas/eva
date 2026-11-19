@@ -30,6 +30,7 @@ GRIS_EVA = "#1F2937"
 TEXTO = "#E5E7EB"
 GRIS_TEXTO = "#9CA3AF"
 ROJO_ERROR = "#F87171"
+AVATAR_SRC = "docs/referencias/Meshy_AI_EvaSeedOfLight.png"
 RADIO = 12
 ANCHO_LATERAL = 280
 ANCHO_PANEL_EVA = 248
@@ -44,20 +45,25 @@ SIN_MEMORIA = "Memoria a largo plazo no disponible"
 log = logging.getLogger(__name__)
 
 
-def _burbuja(texto: ft.Text, de_usuario: bool, boton: ft.Control | None = None) -> ft.Control:
+def _burbuja(texto: ft.Text, de_usuario: bool, boton: ft.Control | None = None, avatar: ft.Control | None = None, fondo: str | None = None) -> ft.Control:
     """User bubbles on the right in blue, Eva's on the left in gray (with
     ``boton`` beside it, e.g. "Escuchar")."""
     globo = ft.Container(
         content=texto,
-        bgcolor=AZUL_USUARIO if de_usuario else GRIS_EVA,
+        bgcolor=fondo or (AZUL_USUARIO if de_usuario else GRIS_EVA),
+        border=ft.Border.all(1, "#4C7884") if fondo == "#0B3442" else None,
         border_radius=RADIO,
         padding=ft.Padding.symmetric(horizontal=14, vertical=10),
         expand_loose=True,
     )
+    controles = [globo] if boton is None else [globo, boton]
+    if avatar is not None:
+        controles.insert(0, avatar)
     return ft.Container(
         content=ft.Row(
-            [globo] if boton is None else [globo, boton],
+            controles,
             alignment=ft.MainAxisAlignment.END if de_usuario else ft.MainAxisAlignment.START,
+            vertical_alignment=ft.CrossAxisAlignment.END,
         ),
         padding=ft.Padding.only(left=60) if de_usuario else ft.Padding.only(right=60),
     )
@@ -82,6 +88,8 @@ class PantallaChat:
         self.config = config
         self.estado_ui = EstadoInterfaz(diseno=leer_diseno(config))
         self.diseno = self.estado_ui.diseno
+        self.color_texto = TEXTO
+        self.titulo_conversacion = ft.Text("Nueva conversación", size=22, weight=ft.FontWeight.W_600, color=TEXTO)
         # Long-term memory (Engram); None when it could not even be created.
         self.memoria = memoria
         self.cliente: ClienteLLM | None = None
@@ -95,12 +103,14 @@ class PantallaChat:
         self._aprendiendo = False
         self._cliente_aprender = None
         self._error_conexion: ft.Control | None = None  # at most one shown
-        self.estado = ft.Text(LISTO, size=12, color=GRIS_TEXTO)
-        self.estado_panel = ft.Text(LISTO, size=12, color=GRIS_TEXTO)
-        self.estado_isla = ft.Text(LISTO, size=11, color=GRIS_TEXTO)
+        self.estado = ft.Text("", size=12, color=GRIS_TEXTO)
+        self.estado_panel = ft.Text("", size=12, color=GRIS_TEXTO)
+        self.estado_isla = ft.Text("Eva", size=11, color=GRIS_TEXTO)
         self.lateral: ft.Control | None = None
         self.panel_eva: ft.Control | None = None
         self._restaurar_isla = lambda: None
+        self._activar_isla = lambda: setattr(self.page.window, "minimized", True)
+        self._cambiar_chrome = lambda custom: None
 
         # Chat area
         self.mensajes = ft.ListView(expand=True, spacing=10, padding=16, auto_scroll=True)
@@ -122,6 +132,7 @@ class PantallaChat:
         # Sidebar
         self.lista = ft.ListView(expand=True, spacing=2)
         self.lista_historial = ft.ListView(expand=True, spacing=2)
+        self.historial_visible = False
         self.pestanas = ft.Row(scroll=ft.ScrollMode.AUTO, spacing=4)
         self.etiqueta_modelo = ft.Text("", size=12, color=GRIS_TEXTO, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         # Discreet note under the model label; hidden while memory works.
@@ -141,15 +152,40 @@ class PantallaChat:
         clave = diseno_valido(diseno)
         if clave is None:
             return
+        # A design change is a presentation transition, never a window-mode
+        # transition. Restore the native window first if the island is open so
+        # the next layout is not left transparent, frameless, or off-screen.
+        if getattr(getattr(self, "_isla_control", None), "visible", False):
+            self._restaurar_isla()
         self.estado_ui.diseno = clave
         self.diseno = clave
         tema = DISENOS[clave]
+        ventana = getattr(self.page, "window", None)
+        if ventana is not None:
+            # Marea owns the top bar; hide Flet's native title-bar buttons to
+            # avoid showing two minimize/maximize/close sets.
+            ventana.title_bar_hidden = clave == "marea"
+            ventana.title_bar_buttons_hidden = clave == "marea"
+            self._cambiar_chrome(clave == "marea")
         self.page.bgcolor = tema.fondo_chat
+        self.color_texto = tema.texto
         self.campo.bgcolor = tema.fondo_chat
         self.campo.border = ft.OutlineInputBorder(
-            border_radius=tema.radio, border_side=ft.BorderSide(1, tema.acento)
+            border_radius=tema.radio, side=ft.BorderSide(1, tema.acento)
         )
         self.boton.icon_color = tema.acento
+        if hasattr(self, "_isla_surface"):
+            self._isla_surface.bgcolor = tema.fondo_chat
+            self._isla_surface.border = ft.Border.all(1, tema.acento)
+        fondos = {"brisa": ("#B8F0E8", "#DDF3FA"), "marea": ("#0B3442", "#102F3A"), "horizonte": ("#CBEAF0", "#DDF1F5")}[clave]
+        for burbuja in self.mensajes.controls:
+            fila = getattr(burbuja, "content", None)
+            controles = getattr(fila, "controls", [])
+            if controles:
+                controles[0].bgcolor = fondos[1]
+                texto = getattr(controles[0], "content", None)
+                if texto is not None:
+                    texto.color = tema.texto
         if hasattr(self, "_shell"):
             nuevo = self._construir_layout()
             self._shell.controls = nuevo.controls
@@ -157,13 +193,18 @@ class PantallaChat:
 
     def _crear_menu(self, ancho: int, incluir_historial: bool = True) -> ft.Container:
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        avatar = (
+            ft.Image(src="docs/referencias/Meshy_AI_EvaSeedOfLight.png", width=42, height=42)
+            if self.diseno == "brisa"
+            else ft.Icon(ft.Icons.AUTO_AWESOME, color=tema.acento, size=30)
+        )
         controles = [
             ft.Row(
-                [ft.Icon(ft.Icons.AUTO_AWESOME, color=tema.acento, size=30), ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=tema.texto)],
+                [avatar, ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=tema.texto)],
                 spacing=8,
             ),
             ft.FilledButton("Nueva conversación", icon=ft.Icons.ADD, on_click=lambda e: self._nueva(), width=ancho),
-            ft.TextButton("Historial", icon=ft.Icons.HISTORY, on_click=lambda e: None),
+            ft.TextButton("Historial", icon=ft.Icons.HISTORY, on_click=lambda e: self._alternar_historial()),
             self.boton_recuerdos,
         ]
         if incluir_historial:
@@ -182,19 +223,91 @@ class PantallaChat:
         )
         return ft.Container(width=ancho, bgcolor=tema.fondo_lateral, padding=16, content=ft.Column(controles, expand=True))
 
+    @staticmethod
+    def _fecha_corta(fecha: str) -> str:
+        if not fecha:
+            return ""
+        try:
+            from datetime import datetime, timezone
+
+            cuando = datetime.fromisoformat(fecha)
+            ahora = datetime.now(timezone.utc)
+            dias = (ahora.date() - cuando.date()).days
+            return "Hoy" if dias == 0 else "Ayer" if dias == 1 else "Esta semana" if dias < 7 else cuando.strftime("%d/%m/%Y")
+        except (TypeError, ValueError):
+            return ""
+
+    def _filas_marea(self) -> list[ft.Control]:
+        tema = DISENOS["marea"]
+        filas = []
+        datos = self.historial.listar_conversaciones_con_fecha()
+        for cid, titulo, fecha in datos:
+            activo = cid == self.conversacion_id
+            indicador = ft.Container(width=3, bgcolor=tema.acento if activo else "#00000000", border_radius=2)
+            fila = ft.Container(
+                content=ft.Row(
+                    [indicador, ft.Column([ft.Text(titulo, color=tema.texto, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS), ft.Text(self._fecha_corta(fecha), color="#A8C0CC", size=12)], spacing=2, expand=True)],
+                    spacing=8,
+                ),
+                bgcolor="#103742" if activo else None,
+                border_radius=10,
+                padding=ft.Padding.symmetric(horizontal=8, vertical=9),
+                tooltip=titulo,
+                on_click=lambda e, cid=cid: self._abrir(cid),
+            )
+            filas.append(fila)
+        return filas
+
     def _crear_historial_marea(self) -> ft.Container:
         tema = DISENOS["marea"]
-        return ft.Container(
-            width=238,
+        self.lista_historial.controls = self._filas_marea()
+        self.historial_marea = ft.Container(
+            width=258,
+            visible=self.historial_visible,
             bgcolor=tema.fondo_historial,
             padding=14,
+            border=ft.Border.only(right=ft.BorderSide(1, "#193844")),
             content=ft.Column([ft.Text("Historial", size=18, color=tema.texto), self.lista_historial], expand=True),
         )
+        return self.historial_marea
+
+    def _controles_ventana_marea(self) -> ft.Row:
+        def boton(icon, tooltip, accion):
+            return ft.IconButton(icon=icon, tooltip=tooltip, icon_size=18, width=32, height=32, padding=0, on_click=accion)
+
+        return ft.Row(
+            [
+                boton(ft.Icons.MINIMIZE, "Minimizar a isla dinámica", lambda e: self._activar_isla()),
+                boton(ft.Icons.CROP_SQUARE, "Maximizar o restaurar", lambda e: self._alternar_maximizado()),
+                boton(ft.Icons.CLOSE, "Cerrar Eva", lambda e: self.page.window.close()),
+            ],
+            spacing=2,
+            tight=True,
+        )
+
+    def _alternar_maximizado(self) -> None:
+        self.page.window.maximized = not bool(getattr(self.page.window, "maximized", False))
+        self.page.window.update()
+
+    def _alternar_historial(self) -> None:
+        self.historial_visible = not self.historial_visible
+        if hasattr(self, "historial_marea"):
+            self.historial_marea.visible = self.historial_visible
+            self.page.update()
 
     def _crear_barra(self) -> ft.Container:
+        controles = self._controles_ventana_marea() if self.diseno == "marea" else None
+        libre = ft.GestureDetector(content=ft.Container(expand=True), expand=True, on_pan_start=lambda e: self.page.window.start_dragging()) if self.diseno == "marea" else ft.Container(expand=True)
+        piezas = [self.titulo_conversacion, libre]
+        if controles:
+            piezas.append(ft.Container(content=controles, alignment=ft.Alignment(1, 0)))
+        else:
+            piezas.append(self.estado)
         return ft.Container(
-            content=ft.Row([ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=TEXTO), ft.Container(expand=True), self.estado]),
-            padding=ft.Padding.only(left=20, right=20, top=14, bottom=8),
+            bgcolor=DISENOS.get(self.diseno or "brisa", DISENOS["brisa"]).fondo_historial,
+            content=ft.Row(piezas),
+            height=40 if self.diseno == "marea" else None,
+            padding=ft.Padding.only(left=20, right=8, top=4 if self.diseno == "marea" else 14, bottom=4 if self.diseno == "marea" else 8),
         )
 
     def _crear_panel_eva(self) -> ft.Container:
@@ -233,8 +346,9 @@ class PantallaChat:
             cabecera = ft.Column([self._crear_tabs_horizonte(), barra], tight=True)
             chat = ft.Column([ft.Column([cabecera, self.mensajes], expand=True), composer], expand=True)
             return ft.Row([self.lateral, chat], expand=True, spacing=0)
+        self.panel_eva = None
         chat = ft.Column([ft.Column([barra, self.mensajes], expand=True), composer], expand=True)
-        return ft.Row([self.lateral, chat, self.panel_eva], expand=True, spacing=0)
+        return ft.Row([self.lateral, chat], expand=True, spacing=0)
 
     def vista(self) -> ft.Control:
         self._shell = self._construir_layout()
@@ -246,11 +360,12 @@ class PantallaChat:
 
     def vista_isla(self) -> ft.Control:
         """Compact view used while the desktop window is minimized."""
-        return ft.Container(
-            visible=False,
-            bgcolor=FONDO_LATERAL,
-            border_radius=22,
-            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        self._isla_surface = ft.Container(
+            bgcolor=tema.fondo_chat,
+            border=ft.Border.all(1, tema.acento),
+            border_radius=28,
+            padding=ft.Padding.symmetric(horizontal=16, vertical=6),
             content=ft.Row(
                 [
                     ft.Icon(ft.Icons.AUTO_AWESOME, color="#67E8F9", size=28),
@@ -260,9 +375,21 @@ class PantallaChat:
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
         )
+        self._isla_control = ft.GestureDetector(
+            visible=False,
+            content=self._isla_surface,
+            on_pan_start=lambda e: self.page.window.start_dragging(),
+        )
+        return self._isla_control
 
     def asignar_restaurar_isla(self, restaurar) -> None:
         self._restaurar_isla = restaurar
+
+    def asignar_activar_isla(self, activar) -> None:
+        self._activar_isla = activar
+
+    def asignar_chrome(self, cambiar) -> None:
+        self._cambiar_chrome = cambiar
 
     def _ajustar_layout(self, e) -> None:
         """Collapse secondary panels when the window becomes tablet-sized."""
@@ -271,7 +398,13 @@ class PantallaChat:
             ancho = 1200
         compacto = ancho < 900
         movil = ancho < 680
-        if self.lateral is not None:
+        if self.diseno == "marea" and hasattr(self, "historial_marea"):
+            estrecho = ancho < 900
+            self.lateral.width = 165 if estrecho else 210
+            self.historial_marea.width = 190 if estrecho else 258
+            self.lateral.visible = ancho >= 720
+            self.historial_marea.visible = self.historial_visible and ancho >= 720
+        elif self.lateral is not None:
             self.lateral.visible = not compacto
         if self.panel_eva is not None:
             self.panel_eva.visible = not compacto
@@ -372,11 +505,12 @@ class PantallaChat:
     # ----- model connection and settings -----
 
     def _poner_estado(self, texto: str, color: str) -> None:
-        self.estado.value = texto
+        visible = "" if texto == LISTO else texto
+        self.estado.value = visible
         self.estado.color = color
-        self.estado_panel.value = texto
+        self.estado_panel.value = visible
         self.estado_panel.color = color
-        self.estado_isla.value = texto
+        self.estado_isla.value = "Eva" if texto == LISTO else texto
         self.estado_isla.color = color
 
     def _ocupar(self, ocupado: bool) -> None:
@@ -454,7 +588,21 @@ class PantallaChat:
 
     def _abrir_ajustes(self) -> None:
         if not self.ocupado:
-            DialogoAjustes(self.page, self.config, self._ajustes_guardados, voz=self.voz).abrir()
+            opciones = {"voz": self.voz, "al_apariencia": self._apariencia_aplicada}
+            try:
+                dialogo = DialogoAjustes(self.page, self.config, self._ajustes_guardados, **opciones)
+            except TypeError as exc:
+                if "al_apariencia" not in str(exc):
+                    raise
+                # Keep small test/integration doubles compatible with the real dialog.
+                dialogo = DialogoAjustes(self.page, self.config, self._ajustes_guardados, voz=self.voz)
+            dialogo.abrir()
+
+    def _apariencia_aplicada(self, config: Config) -> None:
+        self.config = config
+        diseno = leer_diseno(config)
+        if diseno is not None:
+            self.aplicar_diseno(diseno)
 
     def _ajustes_guardados(self, config: Config) -> None:
         self.config = config
@@ -475,7 +623,7 @@ class PantallaChat:
             )
 
         self.lista.controls = [fila(c) for c in conversaciones]
-        self.lista_historial.controls = [fila(c) for c in conversaciones]
+        self.lista_historial.controls = self._filas_marea() if self.diseno == "marea" else [fila(c) for c in conversaciones]
         if self.diseno == "horizonte":
             self._crear_tabs_horizonte()
 
@@ -494,19 +642,44 @@ class PantallaChat:
             return
         self.conversacion_id = conversacion_id
         self.estado_ui.conversacion_id = conversacion_id
+        resumen = next((c for c in self.historial.listar_conversaciones() if c.id == conversacion_id), None)
+        self.titulo_conversacion.value = resumen.titulo if resumen else "Conversación"
         self.mensajes.controls = []
         for m in self.historial.mensajes(conversacion_id):
-            texto = ft.Text(m["content"], color=TEXTO, selectable=True)
+            texto = ft.Text(m["content"], color=self.color_texto, selectable=True)
             de_usuario = m["role"] == "user"
-            self.mensajes.controls.append(_burbuja(texto, de_usuario, None if de_usuario else self._boton_escuchar(texto)))
+            self.mensajes.controls.append(
+                _burbuja(texto, de_usuario, None if de_usuario else self._boton_escuchar(texto), self._avatar_mensaje() if not de_usuario else self._icono_usuario(), self._fondo_mensaje(de_usuario))
+            )
         self._error_conexion = None
         self._refrescar_lista()
         self.page.update()
 
     # ----- chat -----
 
+    def _avatar_mensaje(self) -> ft.Control | None:
+        if not isinstance(self.page, ft.Page):
+            return None
+        return ft.Image(src=AVATAR_SRC, width=34, height=34)
+
+    def _icono_usuario(self) -> ft.Control | None:
+        if not isinstance(self.page, ft.Page) or self.diseno != "marea":
+            return None
+        return ft.Icon(ft.Icons.PERSON_OUTLINE, color="#A8C0CC", size=22)
+
+    def _fondo_mensaje(self, de_usuario: bool) -> str:
+        if self.diseno == "brisa":
+            return "#B8F0E8" if de_usuario else "#DDF3FA"
+        if self.diseno == "marea":
+            return "#0B3442" if de_usuario else "#00000000"
+        if self.diseno == "horizonte":
+            return "#CBEAF0" if de_usuario else "#DDF1F5"
+        return AZUL_USUARIO if de_usuario else GRIS_EVA
+
     def _agregar(self, texto: ft.Text, de_usuario: bool) -> None:
-        self.mensajes.controls.append(_burbuja(texto, de_usuario))
+        self.mensajes.controls.append(
+            _burbuja(texto, de_usuario, avatar=self._avatar_mensaje() if not de_usuario else self._icono_usuario(), fondo=self._fondo_mensaje(de_usuario))
+        )
 
     def _mostrar_error_conexion(self, mensaje: str) -> None:
         """Show a connection error, replacing the previous one instead of piling up."""
@@ -559,10 +732,12 @@ class PantallaChat:
         """Show the question and an answer bubble that will fill as Eva answers."""
         if del_campo:
             self.campo.value = ""
+        if self.conversacion_id is None:
+            self.titulo_conversacion.value = texto[:42] + ("…" if len(texto) > 42 else "")
         self.estado_ui.borrador = "" if del_campo else (self.campo.value or "")
         self.estado_ui.respuesta_en_curso = True
-        self._agregar(ft.Text(texto, color=TEXTO, selectable=True), de_usuario=True)
-        respuesta = ft.Text(PENSANDO, color=TEXTO, selectable=True)
+        self._agregar(ft.Text(texto, color=self.color_texto, selectable=True), de_usuario=True)
+        respuesta = ft.Text(PENSANDO, color=self.color_texto, selectable=True)
         self._agregar(respuesta, de_usuario=False)
         self.page.update()
         return respuesta
