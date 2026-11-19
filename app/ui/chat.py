@@ -132,7 +132,8 @@ class PantallaChat:
         # Sidebar
         self.lista = ft.ListView(expand=True, spacing=2)
         self.lista_historial = ft.ListView(expand=True, spacing=2)
-        self.historial_visible = False
+        # Marea shows the history column beside the menu from the start.
+        self.historial_visible = diseno_valido(leer_diseno(config)) == "marea"
         self.pestanas = ft.Row(scroll=ft.ScrollMode.AUTO, spacing=4)
         self.etiqueta_modelo = ft.Text("", size=12, color=GRIS_TEXTO, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         # Discreet note under the model label; hidden while memory works.
@@ -170,10 +171,17 @@ class PantallaChat:
         self.page.bgcolor = tema.fondo_chat
         self.color_texto = tema.texto
         self.campo.bgcolor = tema.fondo_chat
-        self.campo.border = ft.OutlineInputBorder(
-            border_radius=tema.radio, side=ft.BorderSide(1, tema.acento)
-        )
-        self.boton.icon_color = tema.acento
+        if clave == "marea":
+            # Marea draws field, microphone and send inside one box, so the
+            # composer owns their colors and borders.
+            self.historial_visible = True
+            self.campo.border = ft.NoInputBorder()
+            self.boton.bgcolor = tema.acento
+            self.boton.icon_color = tema.fondo_chat
+        else:
+            self.campo.border = ft.OutlineInputBorder(border_radius=tema.radio, side=ft.BorderSide(1, tema.acento))
+            self.boton.bgcolor = None
+            self.boton.icon_color = tema.acento
         if hasattr(self, "_isla_surface"):
             self._isla_surface.bgcolor = tema.fondo_chat
             self._isla_surface.border = ft.Border.all(1, tema.acento)
@@ -193,20 +201,48 @@ class PantallaChat:
 
     def _crear_menu(self, ancho: int, incluir_historial: bool = True) -> ft.Container:
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        marea = self.diseno == "marea"
         avatar = (
-            ft.Image(src="docs/referencias/Meshy_AI_EvaSeedOfLight.png", width=42, height=42)
+            # The seed PNG has a white background, which would paint a box on
+            # Marea's dark rail, so that design uses the drop icon instead.
+            ft.Icon(ft.Icons.WATER_DROP, color=tema.acento, size=32)
+            if marea
+            else ft.Image(src="docs/referencias/Meshy_AI_EvaSeedOfLight.png", width=42, height=42)
             if self.diseno == "brisa"
             else ft.Icon(ft.Icons.AUTO_AWESOME, color=tema.acento, size=30)
+        )
+        nuevo = (
+            ft.TextButton(
+                "Nuevo chat",
+                icon=ft.Icons.ADD,
+                on_click=lambda e: self._nueva(),
+                width=ancho,
+                style=ft.ButtonStyle(
+                    color=tema.texto,
+                    bgcolor=tema.superficie_mensaje,
+                    shape=ft.RoundedRectangleBorder(radius=14),
+                    side=ft.BorderSide(1, "#1E4A58"),
+                    padding=ft.Padding.symmetric(horizontal=14, vertical=16),
+                ),
+            )
+            if marea
+            else ft.FilledButton("Nueva conversación", icon=ft.Icons.ADD, on_click=lambda e: self._nueva(), width=ancho)
         )
         controles = [
             ft.Row(
                 [avatar, ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=tema.texto)],
                 spacing=8,
             ),
-            ft.FilledButton("Nueva conversación", icon=ft.Icons.ADD, on_click=lambda e: self._nueva(), width=ancho),
+            nuevo,
             ft.TextButton("Historial", icon=ft.Icons.HISTORY, on_click=lambda e: self._alternar_historial()),
             self.boton_recuerdos,
         ]
+        if marea:
+            # The reference lists Ajustes as a fourth menu option instead of a
+            # settings icon at the foot of the rail.
+            controles.append(ft.TextButton("Ajustes", icon=ft.Icons.SETTINGS, on_click=lambda e: self._abrir_ajustes()))
+            controles.append(ft.Container(expand=True))
+            return ft.Container(width=ancho, bgcolor=tema.fondo_lateral, padding=16, content=ft.Column(controles, expand=True, spacing=6))
         if incluir_historial:
             controles.extend([ft.Text("Conversaciones", size=12, color=tema.texto), self.lista])
         controles.extend(
@@ -256,6 +292,8 @@ class PantallaChat:
                 on_click=lambda e, cid=cid: self._abrir(cid),
             )
             filas.append(fila)
+            if (cid, titulo, fecha) != datos[-1]:
+                filas.append(ft.Container(height=1, bgcolor="#15323D", margin=ft.Margin.symmetric(horizontal=10)))
         return filas
 
     def _crear_historial_marea(self) -> ft.Container:
@@ -267,7 +305,17 @@ class PantallaChat:
             bgcolor=tema.fondo_historial,
             padding=14,
             border=ft.Border.only(right=ft.BorderSide(1, "#193844")),
-            content=ft.Column([ft.Text("Historial", size=18, color=tema.texto), self.lista_historial], expand=True),
+            content=ft.Column(
+                [
+                    ft.Container(
+                        padding=ft.Padding.only(left=10, bottom=6),
+                        content=ft.Text("Historial", size=15, weight=ft.FontWeight.W_500, color=tema.texto),
+                    ),
+                    self.lista_historial,
+                ],
+                expand=True,
+                spacing=0,
+            ),
         )
         return self.historial_marea
 
@@ -296,18 +344,53 @@ class PantallaChat:
             self.page.update()
 
     def _crear_barra(self) -> ft.Container:
-        controles = self._controles_ventana_marea() if self.diseno == "marea" else None
-        libre = ft.GestureDetector(content=ft.Container(expand=True), expand=True, on_pan_start=lambda e: self.page.window.start_dragging()) if self.diseno == "marea" else ft.Container(expand=True)
-        piezas = [self.titulo_conversacion, libre]
-        if controles:
-            piezas.append(ft.Container(content=controles, alignment=ft.Alignment(1, 0)))
-        else:
-            piezas.append(self.estado)
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        if self.diseno == "marea":
+            # The reference keeps the title bar empty: only the drag area and
+            # the three window controls, aligned right.
+            libre = ft.GestureDetector(
+                content=ft.Container(expand=True),
+                expand=True,
+                on_pan_start=lambda e: self.page.window.start_dragging(),
+            )
+            return ft.Container(
+                bgcolor=tema.fondo_chat,
+                content=ft.Row([libre, self._controles_ventana_marea()], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                height=44,
+                padding=ft.Padding.only(left=12, right=10),
+            )
         return ft.Container(
-            bgcolor=DISENOS.get(self.diseno or "brisa", DISENOS["brisa"]).fondo_historial,
-            content=ft.Row(piezas),
-            height=40 if self.diseno == "marea" else None,
-            padding=ft.Padding.only(left=20, right=8, top=4 if self.diseno == "marea" else 14, bottom=4 if self.diseno == "marea" else 8),
+            bgcolor=tema.fondo_historial,
+            content=ft.Row([self.titulo_conversacion, ft.Container(expand=True), self.estado]),
+            padding=ft.Padding.only(left=20, right=8, top=14, bottom=8),
+        )
+
+    def _crear_composer(self) -> ft.Container:
+        """One rounded box holding the field, the microphone and send."""
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        if self.diseno != "marea":
+            self.boton.bgcolor = None
+            self.campo.border = ft.OutlineInputBorder(border_radius=RADIO)
+            return ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=16)
+        self.campo.border = ft.NoInputBorder()
+        self.boton.bgcolor = tema.acento
+        self.boton.icon_color = tema.fondo_chat
+        return ft.Container(
+            margin=ft.Margin.only(left=16, right=16, bottom=16),
+            padding=ft.Padding.only(left=18, right=8, top=2, bottom=2),
+            bgcolor=tema.superficie_mensaje,
+            border=ft.Border.all(1, tema.acento),
+            border_radius=16,
+            content=ft.Row(
+                [
+                    self.campo,
+                    self.microfono.boton,
+                    ft.Container(width=1, height=24, bgcolor="#1E4A58"),
+                    self.boton,
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=6,
+            ),
         )
 
     def _crear_panel_eva(self) -> ft.Container:
@@ -333,7 +416,7 @@ class PantallaChat:
     def _construir_layout(self) -> ft.Row:
         clave = self.diseno or "brisa"
         barra = self._crear_barra()
-        composer = ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=16)
+        composer = self._crear_composer()
         if clave == "marea":
             self.lateral = self._crear_menu(210, incluir_historial=False)
             historial = self._crear_historial_marea()
