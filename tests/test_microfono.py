@@ -141,9 +141,12 @@ def _ultimo_error(pantalla):
 def test_the_microphone_sits_next_to_the_send_button(monkeypatch, tmp_path):
     pantalla, _, _ = _pantalla(monkeypatch, tmp_path)
     vista = pantalla.vista()
-    fila = vista.controls[1].controls[1].content
+    fila = vista.content.controls[1].controls[1].content
 
-    assert fila.controls == [pantalla.campo, pantalla.indicador_grabacion.control, pantalla.microfono.boton, pantalla.boton]
+    # The composer is one box: field, recording indicator, microphone,
+    # a divider and send.
+    assert fila.controls[:3] == [pantalla.campo, pantalla.indicador_grabacion.control, pantalla.microfono.boton]
+    assert fila.controls[-1] is pantalla.boton
     assert _en_reposo(pantalla)
 
 

@@ -172,18 +172,9 @@ class PantallaChat:
         self.page.bgcolor = tema.fondo_chat
         self.color_texto = tema.texto
         self.campo.bgcolor = tema.fondo_chat
-        if clave == "marea":
-            # Marea draws field, microphone and send inside one box, so the
-            # composer owns their colors and borders.
-            self.historial_visible = True
-            self.campo.border = ft.NoInputBorder()
-            self.boton.bgcolor = tema.acento
-            self.boton.icon_color = tema.fondo_chat
-        else:
-            self.campo.border = ft.OutlineInputBorder(border_radius=tema.radio, side=ft.BorderSide(1, tema.acento))
-            self.boton.bgcolor = None
-            self.boton.style = None
-            self.boton.icon_color = tema.acento
+        # Every design draws field, microphone and send inside one box, so the
+        # composer owns their colors and borders.
+        self.historial_visible = self.historial_visible or clave == "marea"
         if hasattr(self, "_isla_surface"):
             self._isla_surface.bgcolor = tema.fondo_chat
             self._isla_surface.border = ft.Border.all(1, tema.acento)
@@ -197,80 +188,70 @@ class PantallaChat:
                 if texto is not None:
                     texto.color = tema.texto
         if hasattr(self, "_shell"):
-            nuevo = self._construir_layout()
-            self._shell.controls = nuevo.controls
+            # The shell is a stable container: designs differ in the kind of
+            # layout they build (Marea stacks a title bar over a row), so the
+            # whole content is replaced instead of its children.
+            self._shell.content = self._construir_layout()
         self.page.update()
 
-    def _crear_menu(self, ancho: int, incluir_historial: bool = True) -> ft.Container:
-        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
-        marea = self.diseno == "marea"
-        avatar = (
-            # The seed PNG has a white background, which would paint a box on
-            # Marea's dark rail, so that design uses the drop icon instead.
-            ft.Icon(ft.Icons.WATER_DROP, color=tema.acento, size=32)
-            if marea
-            else ft.Image(src="docs/referencias/Meshy_AI_EvaSeedOfLight.png", width=42, height=42)
-            if self.diseno == "brisa"
-            else ft.Icon(ft.Icons.AUTO_AWESOME, color=tema.acento, size=30)
-        )
-        nuevo = (
-            ft.TextButton("Nuevo chat", icon=ft.Icons.ADD, on_click=lambda e: self._nueva(), width=ancho)
-            if marea
-            else ft.FilledButton("Nueva conversación", icon=ft.Icons.ADD, on_click=lambda e: self._nueva(), width=ancho)
-        )
-        controles = [
-            ft.Row(
-                [avatar, ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=tema.texto)],
-                spacing=8,
-            ),
-            nuevo,
-            ft.TextButton("Historial", icon=ft.Icons.HISTORY, on_click=lambda e: self._alternar_historial()),
-            self.boton_recuerdos,
-        ]
-        if marea:
-            ajustes = ft.TextButton("Ajustes", icon=ft.Icons.SETTINGS, on_click=lambda e: self._abrir_ajustes())
-            # Every option shares one style; hovering outlines it like a card.
-            # One shared instance, so rebuilding the rail never leaves the
-            # reused Recuerdos button on an older style.
-            estilo = self._estilo_menu_marea = getattr(self, "_estilo_menu_marea", None) or ft.ButtonStyle(
+    def _estilo_opcion(self, tema) -> ft.ButtonStyle:
+        """One shared style for every rail option, hovering like a card.
+
+        Shared per design, so rebuilding the rail never leaves the reused
+        Recuerdos button on an older style. Without explicit defaults Flet's
+        dark theme fills the button and pales the label on a light rail.
+        """
+        guardado = getattr(self, "_estilos_opcion", None)
+        if guardado is None:
+            guardado = self._estilos_opcion = {}
+        if tema.id not in guardado:
+            guardado[tema.id] = ft.ButtonStyle(
                 color=tema.texto,
                 alignment=ft.Alignment.CENTER_LEFT,
                 padding=ft.Padding.symmetric(horizontal=14, vertical=16),
                 shape=ft.RoundedRectangleBorder(radius=12),
-                # Without an explicit default the theme fills the button dark.
                 bgcolor={ft.ControlState.DEFAULT: "#00000000", ft.ControlState.HOVERED: tema.superficie_mensaje},
                 side={ft.ControlState.DEFAULT: ft.BorderSide(0, "#00000000"), ft.ControlState.HOVERED: ft.BorderSide(1, tema.acento)},
                 overlay_color="#00000000",
             )
-            for boton in [*controles[1:], ajustes]:
-                boton.style = estilo
-                boton.width = ancho
-            # Breathing room between the Eva mark and the options, with Ajustes
-            # resting at the foot of the rail.
-            controles.insert(1, ft.Container(height=14))
-            controles.append(ft.Container(expand=True))
-            controles.append(ajustes)
-            return ft.Container(
-                width=ancho,
-                bgcolor=tema.fondo_lateral,
-                padding=ft.Padding.only(left=14, right=14, top=20, bottom=16),
-                content=ft.Column(controles, expand=True, spacing=6),
-            )
+        return guardado[tema.id]
+
+    def _crear_menu(self, ancho: int, incluir_historial: bool = True) -> ft.Container:
+        """The rail every design shares: mark, options, and Ajustes at the foot."""
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+        # The seed PNG carries a white background, which paints a box on both
+        # the dark and the aqua rail, so the mark is drawn as an icon.
+        avatar = ft.Icon(ft.Icons.WATER_DROP, color=tema.acento, size=32)
+        ajustes = ft.TextButton("Ajustes", icon=ft.Icons.SETTINGS, on_click=lambda e: self._abrir_ajustes())
+        opciones = [
+            ft.TextButton("Nuevo chat", icon=ft.Icons.ADD, on_click=lambda e: self._nueva()),
+            ft.TextButton("Historial", icon=ft.Icons.HISTORY, on_click=lambda e: self._alternar_historial()),
+            self.boton_recuerdos,
+        ]
+        estilo = self._estilo_opcion(tema)
+        for boton in [*opciones, ajustes]:
+            boton.style = estilo
+            boton.width = ancho
+        controles = [
+            ft.Row([avatar, ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=tema.texto)], spacing=8),
+            ft.Container(height=14),
+            *opciones,
+        ]
         if incluir_historial:
-            controles.extend([ft.Text("Conversaciones", size=12, color=tema.texto), self.lista])
-        controles.extend(
-            [
-                ft.Container(expand=True),
-                ft.Divider(height=1),
-                ft.Row(
-                    [
-                        ft.Container(ft.Column([self.etiqueta_modelo, self.nota_memoria], spacing=2, tight=True), expand=True),
-                        ft.IconButton(icon=ft.Icons.SETTINGS, tooltip="Ajustes", on_click=lambda e: self._abrir_ajustes()),
-                    ]
-                ),
-            ]
+            # Designs without a separate history column list conversations here.
+            controles.append(ft.Container(height=10))
+            controles.append(ft.Text("Conversaciones", size=12, color=tema.texto))
+            controles.append(self.lista)
+        else:
+            controles.append(ft.Container(expand=True))
+        controles.append(ft.Container(ft.Column([self.etiqueta_modelo, self.nota_memoria], spacing=2, tight=True), padding=ft.Padding.only(left=6, bottom=6)))
+        controles.append(ajustes)
+        return ft.Container(
+            width=ancho,
+            bgcolor=tema.fondo_lateral,
+            padding=ft.Padding.only(left=14, right=14, top=20, bottom=16),
+            content=ft.Column(controles, expand=True, spacing=6),
         )
-        return ft.Container(width=ancho, bgcolor=tema.fondo_lateral, padding=16, content=ft.Column(controles, expand=True))
 
     @staticmethod
     def _fecha_corta(fecha: str) -> str:
@@ -373,8 +354,11 @@ class PantallaChat:
                 height=44,
                 padding=ft.Padding.only(left=12, right=10),
             )
+        # The header belongs to the chat surface, so it carries its color and
+        # the design's text color; otherwise the title fades into the rail.
+        self.titulo_conversacion.color = tema.texto
         return ft.Container(
-            bgcolor=tema.fondo_historial,
+            bgcolor=tema.fondo_chat,
             content=ft.Row([self.titulo_conversacion, ft.Container(expand=True), self.estado]),
             padding=ft.Padding.only(left=20, right=8, top=14, bottom=8),
         )
@@ -384,13 +368,6 @@ class PantallaChat:
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
         # While recording, this replaces the field in every design.
         self.indicador_grabacion = IndicadorGrabacion(self.page, acento=tema.acento, texto=tema.texto)
-        if self.diseno != "marea":
-            self.boton.bgcolor = None
-            self.campo.border = ft.OutlineInputBorder(border_radius=RADIO)
-            return ft.Container(
-                ft.Row([self.campo, self.indicador_grabacion.control, self.microfono.boton, self.boton]),
-                padding=16,
-            )
         # A filled field would paint a box of its own inside the composer.
         self.campo.bgcolor = "#00000000"
         self.campo.filled = False
@@ -400,18 +377,21 @@ class PantallaChat:
         self.boton.icon_color = tema.fondo_chat
         # The reference send button is a rounded square, not a circle.
         self.boton.style = ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10))
+        claro = tema.id != "marea"
         return ft.Container(
             margin=ft.Margin.only(left=16, right=16, bottom=16),
             padding=ft.Padding.only(left=18, right=10, top=4, bottom=4),
-            bgcolor=tema.superficie_mensaje,
-            border=ft.Border.all(1, tema.acento),
+            # Light designs keep a white field with a soft outline; Marea uses
+            # its message surface and the accent.
+            bgcolor="#FFFFFF" if claro else tema.superficie_mensaje,
+            border=ft.Border.all(1, "#BBD9E2" if claro else tema.acento),
             border_radius=16,
             content=ft.Row(
                 [
                     self.campo,
                     self.indicador_grabacion.control,
                     self.microfono.boton,
-                    ft.Container(width=1, height=24, bgcolor="#1E4A58"),
+                    ft.Container(width=1, height=24, bgcolor="#BBD9E2" if claro else "#1E4A58"),
                     self.boton,
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -463,7 +443,7 @@ class PantallaChat:
         return ft.Row([self.lateral, chat], expand=True, spacing=0)
 
     def vista(self) -> ft.Control:
-        self._shell = self._construir_layout()
+        self._shell = ft.Container(expand=True, content=self._construir_layout())
         self._ajustar_layout(None)
         if self.diseno is not None:
             self.aplicar_diseno(self.diseno)
@@ -743,11 +723,16 @@ class PantallaChat:
     def _refrescar_lista(self) -> None:
         conversaciones = self.historial.listar_conversaciones()
 
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
+
         def fila(c):
+            abierta = c.id == self.conversacion_id
+            color = tema.acento if abierta else tema.texto
             return ft.ListTile(
-                title=ft.Text(c.titulo, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, size=14),
-                selected=c.id == self.conversacion_id,
-                selected_tile_color=GRIS_EVA,
+                leading=ft.Icon(ft.Icons.CHAT_BUBBLE_OUTLINE, size=18, color=color),
+                title=ft.Text(c.titulo, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, size=14, color=color),
+                selected=abierta,
+                selected_tile_color=tema.superficie_mensaje,
                 dense=True,
                 on_click=lambda e, cid=c.id: self._abrir(cid),
             )

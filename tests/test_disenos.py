@@ -358,3 +358,122 @@ def test_the_recording_indicator_lives_inside_the_composer(tmp_path):
     composer = pantalla._crear_composer()
 
     assert pantalla.indicador_grabacion.control in _descendientes(composer)
+
+
+def test_switching_from_marea_to_brisa_keeps_a_usable_shell(tmp_path):
+    """Marea's shell is a Column and Brisa's a Row: the container must change."""
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    shell = pantalla.vista()
+
+    pantalla.aplicar_diseno("brisa")
+
+    piezas = _descendientes(shell)
+    assert pantalla.campo in piezas
+    assert pantalla.boton in piezas
+    assert pantalla.microfono.boton in piezas
+    # The rail and the chat sit side by side again.
+    fila = [c for c in piezas if isinstance(c, ft.Row) and pantalla.lateral in getattr(c, "controls", [])]
+    assert fila
+
+
+def _brisa(tmp_path):
+    pantalla = PantallaChat(
+        type("Page", (), {"update": lambda self: None, "width": 1200})(),
+        Historial(tmp_path / "eva.db"),
+        Config(extras={"eva": {"ui": {"design": "brisa"}}}),
+    )
+    pantalla.vista()
+    return pantalla
+
+
+def test_brisa_menu_labels_are_readable_on_the_light_rail(tmp_path):
+    """Flet's dark theme paints them pale blue over the aqua rail."""
+    import flet as ft
+
+    pantalla = _brisa(tmp_path)
+    menu = pantalla._crear_menu(230)
+
+    botones = [c for c in _descendientes(menu) if isinstance(c, (ft.TextButton, ft.FilledButton))]
+    assert botones
+    assert all(b.style is not None and b.style.color == DISENOS["brisa"].texto for b in botones)
+
+
+def test_brisa_conversation_rows_use_the_design_colors(tmp_path):
+    pantalla = _brisa(tmp_path)
+    pantalla.historial.crear_conversacion("una charla")
+    pantalla._refrescar_lista()
+
+    fila = pantalla.lista.controls[0]
+    assert fila.title.color == DISENOS["brisa"].texto
+    assert fila.selected_tile_color == DISENOS["brisa"].superficie_mensaje
+
+
+def test_brisa_avatar_has_no_white_box(tmp_path):
+    """The seed PNG carries a white background over the aqua rail."""
+    import flet as ft
+
+    pantalla = _brisa(tmp_path)
+    menu = pantalla._crear_menu(230)
+
+    assert not [c for c in _descendientes(menu) if isinstance(c, ft.Image)]
+
+
+def test_every_design_shares_the_marea_menu_distribution(tmp_path):
+    """One rail layout: Nuevo chat, options, and Ajustes resting at the foot."""
+    import flet as ft
+
+    for clave, hacer in (("brisa", _brisa), ("marea", _marea)):
+        pantalla = hacer(tmp_path / clave if False else tmp_path)
+        pantalla.aplicar_diseno(clave)
+        menu = pantalla._crear_menu(220, incluir_historial=clave != "marea")
+        columna = menu.content
+        botones = [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
+
+        ultimo = columna.controls[-1]
+        assert isinstance(ultimo, ft.TextButton) and ultimo.content == "Ajustes", clave
+        assert "Nuevo chat" in [b.content for b in botones], clave
+        assert all(b.style.alignment == ft.Alignment.CENTER_LEFT for b in botones), clave
+        assert all(b.style.color == DISENOS[clave].texto for b in botones), clave
+        assert all(ft.ControlState.HOVERED in b.style.side for b in botones), clave
+
+
+def test_brisa_chat_header_is_readable(tmp_path):
+    pantalla = _brisa(tmp_path)
+    barra = pantalla._crear_barra()
+
+    assert pantalla.titulo_conversacion.color == DISENOS["brisa"].texto
+    assert barra.bgcolor == DISENOS["brisa"].fondo_chat
+
+
+def test_every_design_holds_the_composer_in_one_box(tmp_path):
+    """The references draw field, microphone and send inside one box."""
+    for clave, hacer in (("brisa", _brisa), ("marea", _marea)):
+        pantalla = hacer(tmp_path)
+        pantalla.aplicar_diseno(clave)
+        composer = pantalla._crear_composer()
+
+        dentro = _descendientes(composer)
+        assert pantalla.campo in dentro, clave
+        assert pantalla.microfono.boton in dentro, clave
+        assert pantalla.boton in dentro, clave
+        assert composer.border is not None, clave
+        assert pantalla.boton.bgcolor == DISENOS[clave].acento, clave
+
+
+def test_conversation_rows_carry_the_speech_bubble_icon(tmp_path):
+    """The reference lists each conversation with a bubble icon."""
+    import flet as ft
+
+    pantalla = _brisa(tmp_path)
+    cid = pantalla.historial.crear_conversacion("una charla")
+    pantalla.conversacion_id = cid
+    pantalla._refrescar_lista()
+
+    fila = pantalla.lista.controls[0]
+    assert isinstance(fila.leading, ft.Icon)
+    assert fila.leading.icon == ft.Icons.CHAT_BUBBLE_OUTLINE
+    # The open conversation stands out in the accent.
+    assert fila.leading.color == DISENOS["brisa"].acento
+    assert fila.title.color == DISENOS["brisa"].acento
