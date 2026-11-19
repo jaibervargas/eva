@@ -441,10 +441,10 @@ def test_every_design_shares_the_marea_menu_distribution(tmp_path):
 
 def test_brisa_chat_header_is_readable(tmp_path):
     pantalla = _brisa(tmp_path)
-    barra = pantalla._crear_barra()
+    cabecera = pantalla._crear_cabecera_chat()
 
     assert pantalla.titulo_conversacion.color == DISENOS["brisa"].texto
-    assert barra.bgcolor == DISENOS["brisa"].fondo_chat
+    assert cabecera.bgcolor == DISENOS["brisa"].fondo_chat
 
 
 def test_every_design_holds_the_composer_in_one_box(tmp_path):
@@ -550,3 +550,165 @@ def test_narrow_windows_collapse_the_panels_in_every_design(tmp_path):
         pantalla._ajustar_layout(None)
         assert pantalla.lateral.width < ANCHO_LATERAL, clave
         assert pantalla.historial_marea.visible is False, clave
+
+
+class PaginaCerrada:
+    """A Flet page whose session died while Eva was still answering."""
+
+    width = 1200
+
+    def __init__(self, fallar_despues=0):
+        self.restantes = fallar_despues
+        self.intentos = 0
+
+    def update(self):
+        self.intentos += 1
+        if self.restantes <= 0:
+            raise RuntimeError("An attempt to fetch destroyed session.")
+        self.restantes -= 1
+
+
+def test_refreshing_a_closed_window_is_not_an_error(tmp_path):
+    pantalla = PantallaChat(PaginaCerrada(), Historial(tmp_path / "eva.db"), Config())
+
+    assert pantalla._actualizar_pagina() is False
+
+
+def test_other_runtime_errors_still_surface(tmp_path):
+    import pytest
+
+    class PaginaRota(PaginaCerrada):
+        def update(self):
+            raise RuntimeError("something else broke")
+
+    pantalla = PantallaChat(PaginaRota(), Historial(tmp_path / "eva.db"), Config())
+
+    with pytest.raises(RuntimeError):
+        pantalla._actualizar_pagina()
+
+
+def _horizonte(tmp_path):
+    pantalla = PantallaChat(
+        type("Page", (), {"update": lambda self: None, "width": 1200})(),
+        Historial(tmp_path / "eva.db"),
+        Config(extras={"eva": {"ui": {"design": "horizonte"}}}),
+    )
+    pantalla.vista()
+    return pantalla
+
+
+def test_every_design_declares_a_text_color_for_its_rail():
+    """Horizonte pairs a dark rail with a light chat: one color cannot serve both."""
+    for diseno in DISENOS.values():
+        assert diseno.texto_lateral
+    assert DISENOS["horizonte"].texto_lateral != DISENOS["horizonte"].texto
+
+
+def test_horizonte_rail_and_history_use_the_rail_text_color(tmp_path):
+    import flet as ft
+
+    pantalla = _horizonte(tmp_path)
+    menu = pantalla._crear_menu(280)
+    botones = [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
+    pantalla.historial.crear_conversacion("una charla")
+    filas = pantalla._filas_historial()
+
+    assert all(b.style.color == DISENOS["horizonte"].texto_lateral for b in botones)
+    titulos = [t for t in _descendientes(filas[0]) if isinstance(t, ft.Text) and t.value == "una charla"]
+    assert titulos and titulos[0].color == DISENOS["horizonte"].texto_lateral
+
+
+def test_the_rail_highlight_belongs_to_the_rail_surface():
+    """Horizonte's rail is dark: the chat surface would hide its light text."""
+    for diseno in DISENOS.values():
+        assert diseno.superficie_lateral
+    assert DISENOS["horizonte"].superficie_lateral != DISENOS["horizonte"].superficie_mensaje
+
+
+def test_horizonte_hover_and_open_conversation_stay_readable(tmp_path):
+    import flet as ft
+
+    pantalla = _horizonte(tmp_path)
+    menu = pantalla._crear_menu(280)
+    botones = [c for c in _descendientes(menu) if isinstance(c, ft.TextButton)]
+    cid = pantalla.historial.crear_conversacion("una charla")
+    pantalla.conversacion_id = cid
+    filas = pantalla._filas_historial()
+
+    assert botones[0].style.bgcolor[ft.ControlState.HOVERED] == DISENOS["horizonte"].superficie_lateral
+    assert filas[0].bgcolor == DISENOS["horizonte"].superficie_lateral
+
+
+def test_long_answers_wrap_inside_the_bubble(tmp_path):
+    """A row without expand lets the balloon grow past the chat width."""
+    import flet as ft
+
+    from app.ui.chat import _burbuja
+
+    burbuja = _burbuja(ft.Text("una respuesta muy larga " * 20), de_usuario=False, avatar=ft.Icon(ft.Icons.WATER_DROP))
+
+    fila = burbuja.content
+    assert fila.expand is True
+    globo = [c for c in fila.controls if isinstance(c, ft.Container)][0]
+    assert globo.expand_loose is True
+
+
+def test_horizonte_has_no_conversation_tabs(tmp_path):
+    """Conversations live in the history column, not in a top strip."""
+    import flet as ft
+
+    pantalla = _horizonte(tmp_path)
+    pantalla.historial.crear_conversacion("una charla")
+    pantalla._refrescar_lista()
+    shell = pantalla.vista()
+
+    piezas = _descendientes(shell)
+    assert not hasattr(pantalla, "pestanas") or pantalla.pestanas not in piezas
+    assert pantalla.historial_marea in piezas
+
+
+def test_every_design_draws_its_own_title_bar(tmp_path):
+    """The window controls live in Eva's bar, not in the native Windows one."""
+    import flet as ft
+
+    for clave, hacer in (("brisa", _brisa), ("marea", _marea), ("horizonte", _horizonte)):
+        pantalla = hacer(tmp_path)
+        pantalla.aplicar_diseno(clave)
+        shell = pantalla.vista()
+        barra = pantalla._crear_barra()
+
+        assert barra.height == 44, clave
+        assert barra.border is not None and barra.border.bottom is not None, clave
+        assert [t for t in _descendientes(barra) if isinstance(t, ft.Text)] == [], clave
+        # The bar crosses the top; rail, history and chat sit below it.
+        contenido = shell.content
+        assert isinstance(contenido, ft.Column), clave
+        assert contenido.controls[0].height == 44, clave
+
+
+def test_the_conversation_title_moves_into_the_chat(tmp_path):
+    """Removing it from the bar must not lose the conversation title."""
+    pantalla = _brisa(tmp_path)
+    shell = pantalla.vista()
+
+    assert pantalla.titulo_conversacion in _descendientes(shell)
+
+
+def test_the_island_uses_the_rail_surface_in_every_design(tmp_path):
+    """Horizonte's chat is light but its island is dark, like the reference."""
+    for clave, hacer in (("brisa", _brisa), ("marea", _marea), ("horizonte", _horizonte)):
+        pantalla = hacer(tmp_path)
+        pantalla.aplicar_diseno(clave)
+        pantalla.vista_isla()
+
+        assert pantalla._isla_surface.bgcolor == DISENOS[clave].fondo_lateral, clave
+        assert pantalla.estado_isla.color == DISENOS[clave].texto_lateral, clave
+
+
+def test_applying_a_design_recolors_an_open_island(tmp_path):
+    pantalla = _horizonte(tmp_path)
+    pantalla.vista_isla()
+
+    pantalla.aplicar_diseno("marea")
+
+    assert pantalla._isla_surface.bgcolor == DISENOS["marea"].fondo_lateral

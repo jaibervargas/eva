@@ -17,8 +17,14 @@ class Diseno:
     fondo_lateral: str
     fondo_historial: str
     texto: str
+    # The rail and the history column can sit on a different surface than the
+    # chat: Horizonte pairs a dark rail with a light chat.
+    texto_lateral: str
     acento: str
     superficie_mensaje: str
+    # Highlight for rail options and the open conversation; it belongs to the
+    # rail surface, not to the chat one.
+    superficie_lateral: str
     radio: int
 
 
@@ -31,8 +37,10 @@ DISENOS = {
         fondo_lateral="#D2F3F4",
         fondo_historial="#D2F3F4",
         texto="#0D2948",
+        texto_lateral="#0D2948",
         acento="#007F8D",
         superficie_mensaje="#DDF3FA",
+        superficie_lateral="#BDE9EC",
         radio=16,
     ),
     "marea": Diseno(
@@ -43,8 +51,10 @@ DISENOS = {
         fondo_lateral="#092732",
         fondo_historial="#0B2C38",
         texto="#E8F4F7",
+        texto_lateral="#E8F4F7",
         acento="#36D5CE",
         superficie_mensaje="#102F3A",
+        superficie_lateral="#102F3A",
         radio=12,
     ),
     "horizonte": Diseno(
@@ -55,8 +65,10 @@ DISENOS = {
         fondo_lateral="#063346",
         fondo_historial="#063346",
         texto="#0B2841",
+        texto_lateral="#E6F6F9",
         acento="#00A3B0",
         superficie_mensaje="#DDF1F5",
+        superficie_lateral="#0A4257",
         radio=16,
     ),
 }

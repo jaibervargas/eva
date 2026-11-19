@@ -63,6 +63,9 @@ def _burbuja(texto: ft.Text, de_usuario: bool, boton: ft.Control | None = None, 
     return ft.Container(
         content=ft.Row(
             controles,
+            # Without expand the row takes the width of its content, so a long
+            # answer grows past the chat instead of wrapping.
+            expand=True,
             alignment=ft.MainAxisAlignment.END if de_usuario else ft.MainAxisAlignment.START,
             vertical_alignment=ft.CrossAxisAlignment.END,
         ),
@@ -135,7 +138,6 @@ class PantallaChat:
         self.lista_historial = ft.ListView(expand=True, spacing=2)
         # Every design shows the history column beside the rail from the start.
         self.historial_visible = True
-        self.pestanas = ft.Row(scroll=ft.ScrollMode.AUTO, spacing=4)
         self.etiqueta_modelo = ft.Text("", size=12, color=GRIS_TEXTO, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         # Discreet note under the model label; hidden while memory works.
         self.nota_memoria = ft.Text(SIN_MEMORIA, size=11, color=GRIS_TEXTO, italic=True, visible=False)
@@ -164,19 +166,20 @@ class PantallaChat:
         tema = DISENOS[clave]
         ventana = getattr(self.page, "window", None)
         if ventana is not None:
-            # Marea owns the top bar; hide Flet's native title-bar buttons to
-            # avoid showing two minimize/maximize/close sets.
-            ventana.title_bar_hidden = clave == "marea"
-            ventana.title_bar_buttons_hidden = clave == "marea"
-            self._cambiar_chrome(clave == "marea")
+            # Eva owns the top bar in every design; hide Flet's native
+            # title-bar buttons to avoid two minimize/maximize/close sets.
+            ventana.title_bar_hidden = True
+            ventana.title_bar_buttons_hidden = True
+            self._cambiar_chrome(True)
         self.page.bgcolor = tema.fondo_chat
         self.color_texto = tema.texto
         self.campo.bgcolor = tema.fondo_chat
         # Every design draws field, microphone and send inside one box, so the
         # composer owns their colors and borders.
         if hasattr(self, "_isla_surface"):
-            self._isla_surface.bgcolor = tema.fondo_chat
+            self._isla_surface.bgcolor = tema.fondo_lateral
             self._isla_surface.border = ft.Border.all(1, tema.acento)
+            self.estado_isla.color = tema.texto_lateral
         fondos = {"brisa": ("#B8F0E8", "#DDF3FA"), "marea": ("#0B3442", "#102F3A"), "horizonte": ("#CBEAF0", "#DDF1F5")}[clave]
         for burbuja in self.mensajes.controls:
             fila = getattr(burbuja, "content", None)
@@ -205,11 +208,11 @@ class PantallaChat:
             guardado = self._estilos_opcion = {}
         if tema.id not in guardado:
             guardado[tema.id] = ft.ButtonStyle(
-                color=tema.texto,
+                color=tema.texto_lateral,
                 alignment=ft.Alignment.CENTER_LEFT,
                 padding=ft.Padding.symmetric(horizontal=14, vertical=16),
                 shape=ft.RoundedRectangleBorder(radius=12),
-                bgcolor={ft.ControlState.DEFAULT: "#00000000", ft.ControlState.HOVERED: tema.superficie_mensaje},
+                bgcolor={ft.ControlState.DEFAULT: "#00000000", ft.ControlState.HOVERED: tema.superficie_lateral},
                 side={ft.ControlState.DEFAULT: ft.BorderSide(0, "#00000000"), ft.ControlState.HOVERED: ft.BorderSide(1, tema.acento)},
                 overlay_color="#00000000",
             )
@@ -225,6 +228,7 @@ class PantallaChat:
         # The seed PNG carries a white background, which paints a box on both
         # the dark and the aqua rail, so the mark is drawn as an icon.
         avatar = ft.Icon(ft.Icons.WATER_DROP, color=tema.acento, size=32)
+        texto_rail = tema.texto_lateral
         ajustes = ft.TextButton("Ajustes", icon=ft.Icons.SETTINGS, on_click=lambda e: self._abrir_ajustes())
         opciones = [
             ft.TextButton("Nuevo chat", icon=ft.Icons.ADD, on_click=lambda e: self._nueva()),
@@ -236,7 +240,7 @@ class PantallaChat:
             boton.style = estilo
             boton.width = ancho
         controles = [
-            ft.Row([avatar, ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=tema.texto)], spacing=8),
+            ft.Row([avatar, ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=texto_rail)], spacing=8),
             ft.Container(height=14),
             *opciones,
         ]
@@ -271,15 +275,16 @@ class PantallaChat:
         for cid, titulo, fecha in datos:
             activo = cid == self.conversacion_id
             indicador = ft.Container(width=3, bgcolor=tema.acento if activo else "#00000000", border_radius=2)
-            atenuado = "#A8C0CC" if tema.id == "marea" else "#5A7B88"
-            separador = "#15323D" if tema.id == "marea" else "#CBE4EA"
+            oscuro = tema.id != "brisa"  # Brisa is the only light rail
+            atenuado = "#A8C0CC" if oscuro else "#5A7B88"
+            separador = "#15323D" if oscuro else "#CBE4EA"
             globo = ft.Icon(ft.Icons.CHAT_BUBBLE_OUTLINE, size=16, color=tema.acento if activo else atenuado)
             fila = ft.Container(
                 content=ft.Row(
-                    [indicador, globo, ft.Column([ft.Text(titulo, color=tema.texto, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS), ft.Text(self._fecha_corta(fecha), color=atenuado, size=12)], spacing=2, expand=True)],
+                    [indicador, globo, ft.Column([ft.Text(titulo, color=tema.texto_lateral, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS), ft.Text(self._fecha_corta(fecha), color=atenuado, size=12)], spacing=2, expand=True)],
                     spacing=8,
                 ),
-                bgcolor=tema.superficie_mensaje if activo else None,
+                bgcolor=tema.superficie_lateral if activo else None,
                 border_radius=10,
                 padding=ft.Padding.symmetric(horizontal=8, vertical=9),
                 tooltip=titulo,
@@ -298,12 +303,12 @@ class PantallaChat:
             visible=self.historial_visible,
             bgcolor=tema.fondo_historial,
             padding=14,
-            border=ft.Border.only(right=ft.BorderSide(1, "#193844" if tema.id == "marea" else "#CBE4EA")),
+            border=ft.Border.only(right=ft.BorderSide(1, "#CBE4EA" if tema.id == "brisa" else "#193844")),
             content=ft.Column(
                 [
                     ft.Container(
                         padding=ft.Padding.only(left=10, bottom=6),
-                        content=ft.Text("Historial", size=15, weight=ft.FontWeight.W_500, color=tema.texto),
+                        content=ft.Text("Historial", size=15, weight=ft.FontWeight.W_500, color=tema.texto_lateral),
                     ),
                     self.lista_historial,
                 ],
@@ -338,24 +343,28 @@ class PantallaChat:
             self.page.update()
 
     def _crear_barra(self) -> ft.Container:
+        """Eva's own title bar: drag area and the three window controls.
+
+        Every design draws it, so the native Windows bar stays hidden and the
+        conversation title lives in the chat header instead.
+        """
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
-        if self.diseno == "marea":
-            # The reference keeps the title bar empty: only the drag area and
-            # the three window controls, aligned right.
-            libre = ft.GestureDetector(
-                content=ft.Container(expand=True),
-                expand=True,
-                on_pan_start=lambda e: self.page.window.start_dragging(),
-            )
-            return ft.Container(
-                bgcolor=tema.fondo_lateral,
-                border=ft.Border.only(bottom=ft.BorderSide(1, "#193844")),
-                content=ft.Row([libre, self._controles_ventana_marea()], vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                height=44,
-                padding=ft.Padding.only(left=12, right=10),
-            )
-        # The header belongs to the chat surface, so it carries its color and
-        # the design's text color; otherwise the title fades into the rail.
+        libre = ft.GestureDetector(
+            content=ft.Container(expand=True),
+            expand=True,
+            on_pan_start=lambda e: self.page.window.start_dragging(),
+        )
+        return ft.Container(
+            bgcolor=tema.fondo_lateral,
+            border=ft.Border.only(bottom=ft.BorderSide(1, "#CBE4EA" if tema.id == "brisa" else "#193844")),
+            content=ft.Row([libre, self._controles_ventana_marea()], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            height=44,
+            padding=ft.Padding.only(left=12, right=10),
+        )
+
+    def _crear_cabecera_chat(self) -> ft.Container:
+        """The conversation title over the chat surface."""
+        tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
         self.titulo_conversacion.color = tema.texto
         return ft.Container(
             bgcolor=tema.fondo_chat,
@@ -413,34 +422,19 @@ class PantallaChat:
             ),
         )
 
-    def _crear_tabs_horizonte(self) -> ft.Row:
-        self.pestanas.controls = []
-        for resumen in self.historial.listar_conversaciones()[:6]:
-            self.pestanas.controls.append(ft.TextButton(resumen.titulo, on_click=lambda e, cid=resumen.id: self._abrir(cid)))
-        return self.pestanas
-
     def _construir_layout(self) -> ft.Control:
         clave = self.diseno or "brisa"
         barra = self._crear_barra()
         composer = self._crear_composer()
-        # Every design pairs the rail with the history column it toggles.
+        # Every design pairs the rail with the history column it toggles, under
+        # one title bar that crosses the whole window.
         historial = self._crear_columna_historial()
-        if clave == "marea":
-            self.lateral = self._crear_menu(ANCHO_LATERAL)
-            self.panel_eva = None
-            chat = ft.Column([self.mensajes, composer], expand=True)
-            # The title bar crosses the whole window; menu, history and chat
-            # sit below it, as in the reference.
-            cuerpo = ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
-            return ft.Column([barra, cuerpo], expand=True, spacing=0)
         self.lateral = self._crear_menu(ANCHO_LATERAL)
         self.panel_eva = None
-        if clave == "horizonte":
-            cabecera = ft.Column([self._crear_tabs_horizonte(), barra], tight=True)
-            chat = ft.Column([ft.Column([cabecera, self.mensajes], expand=True), composer], expand=True)
-            return ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
-        chat = ft.Column([ft.Column([barra, self.mensajes], expand=True), composer], expand=True)
-        return ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
+        cabecera = [] if clave == "marea" else [self._crear_cabecera_chat()]
+        chat = ft.Column([*cabecera, self.mensajes, composer], expand=True)
+        cuerpo = ft.Row([self.lateral, historial, chat], expand=True, spacing=0)
+        return ft.Column([barra, cuerpo], expand=True, spacing=0)
 
     def vista(self) -> ft.Control:
         self._shell = ft.Container(expand=True, content=self._construir_layout())
@@ -453,12 +447,14 @@ class PantallaChat:
     def vista_isla(self) -> ft.Control:
         """Compact view used while the desktop window is minimized."""
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
-        # The capsule carries one line of text, so it reads at body size.
+        # The capsule carries one line of text, so it reads at body size. It
+        # sits on the rail surface: Horizonte's chat is light but its island is
+        # dark, as in the reference.
         self.estado_isla.size = 14
         self.estado_isla.weight = ft.FontWeight.W_500
-        self.estado_isla.color = tema.texto
+        self.estado_isla.color = tema.texto_lateral
         self._isla_surface = ft.Container(
-            bgcolor=tema.fondo_chat,
+            bgcolor=tema.fondo_lateral,
             border=ft.Border.all(1, tema.acento),
             border_radius=28,
             padding=ft.Padding.symmetric(horizontal=16, vertical=6),
@@ -472,7 +468,7 @@ class PantallaChat:
                     ft.IconButton(
                         ft.Icons.CROP_SQUARE,
                         tooltip="Volver a la ventana",
-                        icon_color=tema.texto,
+                        icon_color=tema.texto_lateral,
                         icon_size=18,
                         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
                         on_click=lambda e: self._restaurar_isla(),
@@ -589,6 +585,20 @@ class PantallaChat:
         except Exception:  # e.g. the window is closing: keep the extractor alive
             log.exception("Could not refresh the screen after learning")
 
+    def _actualizar_pagina(self) -> bool:
+        """Refresh the window; False once its session is gone.
+
+        Answers stream from a worker thread, so the user can close Eva while
+        one is still running. That is an ordinary ending, not an error.
+        """
+        try:
+            self.page.update()
+        except RuntimeError as exc:
+            if "destroyed session" not in str(exc).lower():
+                raise
+            return False
+        return True
+
     def _respaldo_nube(self) -> ClienteLLM | None:
         """Cloud client for fact extraction (the last cloud provider saved in
         settings), or ``None`` when there is none, its key is missing or its
@@ -622,7 +632,7 @@ class PantallaChat:
         # At rest the capsule keeps the design's text color; a status color
         # only applies while there is something to report.
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
-        self.estado_isla.color = tema.texto if texto == LISTO else color
+        self.estado_isla.color = tema.texto_lateral if texto == LISTO else color
 
     def _ocupar(self, ocupado: bool) -> None:
         with self._estado:
@@ -740,8 +750,6 @@ class PantallaChat:
 
         self.lista.controls = [fila(c) for c in conversaciones]
         self.lista_historial.controls = self._filas_historial()
-        if self.diseno == "horizonte":
-            self._crear_tabs_horizonte()
 
     def _nueva(self) -> None:
         if self.ocupado:
@@ -884,7 +892,10 @@ class PantallaChat:
             for parte in conversacion.enviar(texto):
                 acumulado += parte
                 respuesta.value = acumulado
-                self.page.update()
+                if not self._actualizar_pagina():
+                    # The window closed: stop streaming instead of answering
+                    # into a dead session.
+                    return
             if not acumulado:
                 respuesta.value = "(Eva no devolvió texto)"
             self.conversacion_id = conversacion.conversacion_id

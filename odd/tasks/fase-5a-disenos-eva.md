@@ -10,11 +10,13 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - S2 (user): "Añade la opción «Ajustes → Apariencia» al menú izquierdo. Ahí se debe poder previsualizar otro diseño, aplicarlo o cancelar. Marca el diseño actual."
   Add a real appearance dialog; apply immediately without losing active conversation, draft, streaming answer or selected tab. Cancel restores the previous design.
 - S3 (user): "Comparte los componentes de chat, escritura de mensajes, avatar y controles de ventana. Define una configuración visual por diseño con colores, tipografía, espacios, radios y bordes. Implementa las diferencias de distribución de cada propuesta."
-  Use one shared state model and a design catalog. Brisa: light aqua sidebar, one history rail. Marea: petroleum dark, menu plus history column. Horizonte: petroleum sidebar, light chat, tabs and task-card presentation only when real structured task data exists.
+  Use one shared state model and a design catalog. Brisa: light aqua sidebar. Marea: petroleum dark. Horizonte: petroleum sidebar with light chat. Superseded by L15: all three share one rail, one history column and Eva's own title bar; Horizonte has no tabs, and task cards stay out for lack of real structured task data.
 - S4 (user): "Implementa los tres modos de ventana" and specifically "Pantalla completa", "Ventana mediana" and "Isla dinámica".
   Fullscreen keeps scrolling chat and fixed composer; medium starts at 1024×700 and is adjustable; island starts around 300×56, shows avatar/real status/"Volver al chat", preserves previous size/position and keeps an active response running.
 - S5 (user): "Usa contenido real en el chat." and "Si alguna función representada en las imágenes requiere datos o capacidades que todavía no existen en Eva, indica cuál falta y evita mostrar controles que aparenten funcionar."
   Do not show fake Favorites, editable tabs or task checkboxes without backing data. The existing history has no pinned flag, and messages are plain text/Markdown; document these omissions.
+- S7 (user): "ahora quiero ajustar el modal de ajustes este es el diseño" with `docs/referencias/Ajustes de Eva en diseño Marea.png`.
+  The dialog shows a large "Ajustes" title with a close button, sections headed by icon plus name (Modelo de IA, Voz, Apariencia) separated by thin dividers, field labels above each control, the model state as a dot with "N modelos instalados" and the address below, Apariencia as a row showing the current design with a chevron, and Cancelar plus a filled Guardar in the accent. Colors follow the active design, never fixed dark values.
 - S6: use Flet 1.1.2 APIs, supplied references under `docs/referencias`, and the original Eva seed image where technically suitable; exclude the IDEVA logo. Keep accessible focus, labels and contrast. Capture nine Windows states (3 designs × 3 modes) or report unavailable capture tooling.
 
 ## Tasks
@@ -24,6 +26,7 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - T3 [S4] fullscreen/medium/island integration per design — done (L6; 808 passed, 3 skipped)
 - T4 [S5, S6] tests, docs, captures and Windows validation — in progress (L7, L8)
 - T5 [S1-S6] review, PR and delivery — pending
+- T6 [S7] settings dialog per the Marea reference — pending
 
 ## Log
 
@@ -32,6 +35,8 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - L3 (decision): User approved implementation and asked to add it to the work plan as Phase 5A: "si me parece de paso agrega estos cambios en el pland e trabajo como fase 5A".
 - L4 (T1 verification): Added `app/ui/disenos.py` with the three structural design tokens, nested preference helpers, shared `EstadoInterfaz`, and first-run `SelectorDiseno`; wired selection into `app/main.py` and the live chat theme. Focused tests: 48 passed. Full suite: 808 passed, 3 skipped.
 - L5 (T2 verification): Added structural layout branches in `PantallaChat`: Brisa uses one history rail, Marea uses menu plus a separate history column, and Horizonte uses real-conversation tabs. Focused layout/regression tests: 66 passed. Full suite: 808 passed, 3 skipped. Unsupported Favorites and fake task cards remain omitted.
+- L16 (T6 requested): The user asked to restyle the settings dialog per `docs/referencias/Ajustes de Eva en diseño Marea.png`.
+- L15 (requirement change, S3): The user removed Horizonte's conversation tabs: "en la ventana de chat en la parte superior aparecen como los chats favoritos quitalos". Tabs and `_crear_tabs_horizonte` were deleted; conversations live only in the history column. The user also asked every design to draw Marea's own title bar and fixed the island colors to the rail surface. S3 no longer requires tabs for Horizonte.
 - L14 (T4, Brisa validated and shell defect): The user's Brisa screenshot exposed a real defect: `aplicar_diseno` replaced the children of the previous container, so switching from Marea's Column into Brisa's Row stacked the layout and lost the composer entirely. The shell is now a stable container whose content is replaced (`b4bccb3`). Brisa was also unreadable (Flet's dark theme over the aqua rail) and the seed PNG drew a white box. On the user's request the three designs now share one 280 px rail and the history column, with no conversation list in the rail (`7b7b3be`). Full suite: 861 passed, 3 skipped. User confirmed Brisa and the equal rail width live.
 - L13 (user): "deja el menu con la misma distribucion que le hicimos a marea", "la parte de conversaciones del menu quitalas de ahi y deja la funcionalidad del historial como la dejamos en marea" and "en marea ajusta el menu al mismo tamaño que estas utilizando aca en brisa".
 - L12 (T4, island and recording): Aligned the island capsule with the reference (drop, divider, the real state alone at body size, square button) and added the in-composer recording report: red dot, "Grabando…", five beating bars in the design accent and elapsed time, in all three designs (`fc33929`). The bars are an activity signal, never a waveform: `AudioRecorder` exposes no input level (only a raw `on_stream`), and the user chose the honest indicator over consuming that stream. Full suite: 847 passed, 3 skipped.

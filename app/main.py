@@ -47,7 +47,7 @@ def crear_main(memoria: MemoriaEngram | None) -> Callable[[ft.Page], None]:
         completa = pantalla.vista()
         if hasattr(pantalla, "vista_isla"):
             isla = pantalla.vista_isla()
-            controlador = IslaFlotante(page, completa, isla, custom_chrome=pantalla.diseno == "marea")
+            controlador = IslaFlotante(page, completa, isla, custom_chrome=True)
             pantalla.asignar_restaurar_isla(controlador.restaurar)
             pantalla.asignar_activar_isla(controlador.activar)
             pantalla.asignar_chrome(lambda custom: setattr(controlador, "custom_chrome", custom))
