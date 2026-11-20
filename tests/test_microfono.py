@@ -141,9 +141,12 @@ def _ultimo_error(pantalla):
 def test_the_microphone_sits_next_to_the_send_button(monkeypatch, tmp_path):
     pantalla, _, _ = _pantalla(monkeypatch, tmp_path)
     vista = pantalla.vista()
-    fila = vista.controls[1].controls[1].content
+    fila = pantalla._crear_composer().content
 
-    assert fila.controls == [pantalla.campo, pantalla.microfono.boton, pantalla.boton]
+    # The composer is one box: field, recording indicator, microphone,
+    # a divider and send.
+    assert fila.controls[:3] == [pantalla.campo, pantalla.indicador_grabacion.control, pantalla.microfono.boton]
+    assert fila.controls[-1] is pantalla.boton
     assert _en_reposo(pantalla)
 
 
@@ -166,6 +169,7 @@ def test_first_click_checks_the_microphone_and_starts_recording_a_wav(monkeypatc
     assert vistos == [(ft.Icons.STOP, "Detener", True)]
     assert (boton.icon, boton.tooltip, boton.disabled) == (ft.Icons.STOP, "Detener", False)
     assert boton.icon_color == ROJO_ERROR
+    assert pantalla.estado.value == "Escuchando…"
     # Nothing typed can be sent while recording.
     assert pantalla.ocupado is True and pantalla.boton.disabled is True
     Path(grabador.rutas[0]).unlink()
@@ -180,6 +184,7 @@ def test_second_click_transcribes_off_the_ui_loop_and_sends_the_text(monkeypatch
 
     assert grabador.llamadas == ["permiso", "dispositivos", "empezar", "detener"]
     assert transcriptor.vistos == [("transcribir", [TRANSCRIBIENDO], True, True)]
+    assert pantalla.estado.value == ""
     assert transcriptor.hilos[0] != threading.get_ident()
     assert transcriptor.rutas == grabador.rutas
     # Same path as typed text: user bubble, answer and history.
@@ -412,3 +417,28 @@ def test_the_recording_notice_goes_away_when_stopping_fails(monkeypatch, tmp_pat
 
     assert GRABANDO not in [t.value for t in _textos(pantalla)]
     assert _en_reposo(pantalla)
+
+
+def test_the_composer_shows_the_recording_indicator_while_capturing(monkeypatch, tmp_path):
+    pantalla, _, _ = _pantalla(monkeypatch, tmp_path)
+    pantalla.vista()
+    pantalla.iniciar()
+
+    _clic(pantalla)
+    assert pantalla.campo.visible is False
+    assert pantalla.indicador_grabacion.control.visible is True
+
+    _clic(pantalla)
+    assert pantalla.campo.visible is True
+    assert pantalla.indicador_grabacion.control.visible is False
+
+
+def test_the_recording_indicator_goes_away_when_starting_fails(monkeypatch, tmp_path):
+    pantalla, _, _ = _pantalla(monkeypatch, tmp_path, grabador=GrabadorFalso(permiso=False))
+    pantalla.vista()
+    pantalla.iniciar()
+
+    _clic(pantalla)
+
+    assert pantalla.campo.visible is True
+    assert pantalla.indicador_grabacion.control.visible is False

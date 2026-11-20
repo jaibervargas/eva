@@ -110,3 +110,13 @@ class Historial:
                 "GROUP BY c.id ORDER BY COALESCE(MAX(m.id), 0) DESC, c.id DESC"
             ).fetchall()
         return [ResumenConversacion(id=i, titulo=t) for i, t in filas]
+
+    def listar_conversaciones_con_fecha(self) -> list[tuple[int, str, str]]:
+        """Conversation id, title and creation timestamp for visual history rows."""
+        with self._conexion() as db:
+            filas = db.execute(
+                "SELECT c.id, c.titulo, c.creada FROM conversaciones c "
+                "LEFT JOIN mensajes m ON m.conversacion_id = c.id "
+                "GROUP BY c.id ORDER BY COALESCE(MAX(m.id), 0) DESC, c.id DESC"
+            ).fetchall()
+        return [(int(i), t, creada) for i, t, creada in filas]

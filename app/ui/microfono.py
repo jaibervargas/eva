@@ -107,6 +107,7 @@ class Microfono:
         self.grabando = False
         self._procesando = False
         self._ruta = None
+        self.pantalla.mostrar_grabacion(False)
         self._mostrar_detener(False)
         self.pantalla._ocupar(False)
         if error is not None:
@@ -139,7 +140,10 @@ class Microfono:
         self._ruta = ruta
         self.grabando = True
         self._procesando = False
+        # The composer reports the recording in place of the writing field.
+        self.pantalla.mostrar_grabacion(True)
         self._aviso_grabando = self.pantalla.mostrar_aviso(GRABANDO)
+        self.pantalla._poner_estado("Escuchando…", ROJO)
         self.actualizar()
         self.pantalla.page.update()
 
@@ -191,11 +195,13 @@ class Microfono:
         transcriptor = self.transcriptor
         descargar = transcriptor.necesita_descarga()
         aviso = self.pantalla.mostrar_aviso(DESCARGANDO if descargar else TRANSCRIBIENDO)
+        self.pantalla._poner_estado(DESCARGANDO if descargar else TRANSCRIBIENDO, "#9CA3AF")
         self.pantalla.page.update()  # show the bubble before the slow work starts
         try:
             if descargar:
                 await asyncio.to_thread(transcriptor.cargar)
                 aviso.value = TRANSCRIBIENDO
+                self.pantalla._poner_estado(TRANSCRIBIENDO, "#9CA3AF")
                 self.pantalla.page.update()
             texto = await asyncio.to_thread(transcriptor.transcribir, audio)
             return texto.strip(), None

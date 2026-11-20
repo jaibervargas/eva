@@ -198,6 +198,44 @@ def test_settings_that_cannot_be_saved_keep_the_dialog_open(monkeypatch, datos):
 # ----- chat screen -----
 
 
+def test_responsive_shell_starts_with_full_layout_and_hides_panels_on_narrow_width(tmp_path):
+    page = FakePage()
+    page.width = 1280
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.vista()
+
+    assert pantalla.estado.value == ""
+    assert pantalla.lateral.visible is True
+    # Brisa follows its reference: one sidebar and no right context panel.
+    assert pantalla.panel_eva is None
+
+    page.width = 640
+    pantalla._ajustar_layout(None)
+    assert pantalla.lateral.visible is False
+
+
+def test_busy_state_is_visible_and_restores_ready_state(tmp_path):
+    page = FakePage()
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.vista()
+
+    pantalla._ocupar(True)
+    assert pantalla.estado.value == "Pensando…"
+    assert pantalla.estado.color == chat.GRIS_TEXTO
+
+    pantalla._ocupar(False)
+    assert pantalla.estado.value == ""
+
+
+def test_connection_state_is_visible(tmp_path):
+    page = FakePage(ejecutar=False)
+    pantalla = _pantalla(tmp_path, page)
+    pantalla.vista()
+
+    pantalla._conectar_en_segundo_plano()
+    assert pantalla.estado.value == "Conectando…"
+
+
 def test_a_turn_adopts_the_new_conversation_id(monkeypatch, tmp_path):
     _usar_servidor(monkeypatch, Servidor(models=["m"], chunks=[_chunk(content="Hola"), _chunk(content=" Ana")]))
     pantalla = _pantalla(tmp_path)
@@ -352,6 +390,8 @@ def test_field_is_unlocked_even_if_connecting_raises(monkeypatch, tmp_path):
     assert pantalla.campo.disabled is False
     assert pantalla.ocupado is False
     assert pantalla.campo.value == "hola"
+    assert pantalla.estado.value == "Sin conexión"
+    assert "Ocurrió un error inesperado al conectar con el modelo: inesperado" in _valores(pantalla)
 
 
 def test_field_is_unlocked_when_reconnecting_fails(monkeypatch, tmp_path):
@@ -569,6 +609,19 @@ def test_eva_remembers_the_user_in_a_new_conversation_from_the_screen(monkeypatc
         {"role": "user", "content": "¿Cómo me llamo?"},
         {"role": "assistant", "content": "Hola"},
     ]
+
+
+def test_memory_refresh_after_window_close_is_ignored(monkeypatch, tmp_path, caplog):
+    pantalla, _ = _con_memoria(monkeypatch, tmp_path, MemoriaFalsa())
+
+    def ventana_cerrada(*controles):
+        raise RuntimeError("An attempt to fetch destroyed session.")
+
+    pantalla.page.update = ventana_cerrada
+    with caplog.at_level(logging.ERROR):
+        pantalla._aprender(LLMGuion(respuesta="", extraccion=""), "dato")
+
+    assert "destroyed session" not in caplog.text
 
 
 def test_memory_that_stops_working_keeps_the_chat_and_shows_the_note(monkeypatch, tmp_path, caplog):
