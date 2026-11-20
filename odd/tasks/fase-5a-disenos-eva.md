@@ -26,7 +26,7 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - T3 [S4] fullscreen/medium/island integration per design — done (L6; 808 passed, 3 skipped)
 - T4 [S5, S6] tests, docs, captures and Windows validation — in progress (L7, L8)
 - T5 [S1-S6] review, PR and delivery — pending
-- T6 [S7] settings dialog per the Marea reference — pending
+- T6 [S7] settings dialog per the Marea reference — in progress (L17; `f5d906a` dialog, `6e4f86c` chat text; 881 passed, 3 skipped; awaiting live check)
 
 ## Log
 
@@ -35,6 +35,7 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - L3 (decision): User approved implementation and asked to add it to the work plan as Phase 5A: "si me parece de paso agrega estos cambios en el pland e trabajo como fase 5A".
 - L4 (T1 verification): Added `app/ui/disenos.py` with the three structural design tokens, nested preference helpers, shared `EstadoInterfaz`, and first-run `SelectorDiseno`; wired selection into `app/main.py` and the live chat theme. Focused tests: 48 passed. Full suite: 808 passed, 3 skipped.
 - L5 (T2 verification): Added structural layout branches in `PantallaChat`: Brisa uses one history rail, Marea uses menu plus a separate history column, and Horizonte uses real-conversation tabs. Focused layout/regression tests: 66 passed. Full suite: 808 passed, 3 skipped. Unsupported Favorites and fake task cards remain omitted.
+- L17 (user): "el boton de de apariencia ya no funciona", then "si ya abre , en la parte del chat ajusta el responsive de los textos". Chat bubbles now take a side gutter of 12% of the width (16–120 px) and message text drops from 15 to 13 below 760 px, re-flowing existing messages on resize. `docs/plan-de-trabajo.md` Phase 5A updated: four items checked, T6 item added, deliberate omissions documented.
 - L16 (T6 requested): The user asked to restyle the settings dialog per `docs/referencias/Ajustes de Eva en diseño Marea.png`.
 - L15 (requirement change, S3): The user removed Horizonte's conversation tabs: "en la ventana de chat en la parte superior aparecen como los chats favoritos quitalos". Tabs and `_crear_tabs_horizonte` were deleted; conversations live only in the history column. The user also asked every design to draw Marea's own title bar and fixed the island colors to the rail surface. S3 no longer requires tabs for Horizonte.
 - L14 (T4, Brisa validated and shell defect): The user's Brisa screenshot exposed a real defect: `aplicar_diseno` replaced the children of the previous container, so switching from Marea's Column into Brisa's Row stacked the layout and lost the composer entirely. The shell is now a stable container whose content is replaced (`b4bccb3`). Brisa was also unreadable (Flet's dark theme over the aqua rail) and the seed PNG drew a white box. On the user's request the three designs now share one 280 px rail and the history column, with no conversation list in the rail (`7b7b3be`). Full suite: 861 passed, 3 skipped. User confirmed Brisa and the equal rail width live.
