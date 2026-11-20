@@ -340,7 +340,7 @@ class PantallaChat:
             [
                 boton(ft.Icons.MINIMIZE, "Minimizar a isla dinámica", lambda e: self._activar_isla()),
                 boton(ft.Icons.CROP_SQUARE, "Maximizar o restaurar", lambda e: self._alternar_maximizado()),
-                boton(ft.Icons.CLOSE, "Cerrar Eva", lambda e: self.page.window.close()),
+                boton(ft.Icons.CLOSE, "Cerrar Eva", self._cerrar_ventana),
             ],
             spacing=2,
             tight=True,
@@ -356,6 +356,14 @@ class PantallaChat:
             self.historial_marea.visible = self.historial_visible
             self.page.update()
 
+    async def _cerrar_ventana(self, e=None) -> None:
+        """Flet 1.1.2 makes Window.close a coroutine; it must be awaited."""
+        await self.page.window.close()
+
+    async def _arrastrar_ventana(self, e=None) -> None:
+        """Window.start_dragging is a coroutine too; await it to move Eva."""
+        await self.page.window.start_dragging()
+
     def _crear_barra(self) -> ft.Container:
         """Eva's own title bar: drag area and the three window controls.
 
@@ -366,7 +374,7 @@ class PantallaChat:
         libre = ft.GestureDetector(
             content=ft.Container(expand=True),
             expand=True,
-            on_pan_start=lambda e: self.page.window.start_dragging(),
+            on_pan_start=self._arrastrar_ventana,
         )
         return ft.Container(
             bgcolor=tema.fondo_lateral,
@@ -495,7 +503,7 @@ class PantallaChat:
         self._isla_control = ft.GestureDetector(
             visible=False,
             content=self._isla_surface,
-            on_pan_start=lambda e: self.page.window.start_dragging(),
+            on_pan_start=self._arrastrar_ventana,
         )
         return self._isla_control
 

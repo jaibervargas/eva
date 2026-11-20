@@ -750,3 +750,59 @@ def test_message_text_shrinks_on_narrow_windows(tmp_path):
     chico = pantalla.mensajes.controls[0].content.controls[-1].content.size
 
     assert grande > chico
+
+
+class _VentanaAsincrona:
+    """Flet 1.1.2 window: close and start_dragging are coroutines."""
+
+    def __init__(self):
+        self.llamadas = []
+
+    async def close(self):
+        self.llamadas.append("close")
+
+    async def start_dragging(self):
+        self.llamadas.append("start_dragging")
+
+
+def _ejecutar_manejador(manejador):
+    """Run a handler the way Flet does: await it only if it is async."""
+    import asyncio
+
+    if asyncio.iscoroutinefunction(manejador):
+        asyncio.run(manejador(None))
+    else:
+        manejador(None)
+
+
+def test_close_button_awaits_the_window_close(tmp_path):
+    """A lambda returning Window.close() left the coroutine never awaited."""
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    pantalla.page.window = _VentanaAsincrona()
+    barra = pantalla._crear_barra()
+
+    cerrar = next(c for c in _descendientes(barra) if isinstance(c, ft.IconButton) and c.tooltip == "Cerrar Eva")
+    _ejecutar_manejador(cerrar.on_click)
+
+    assert pantalla.page.window.llamadas == ["close"]
+
+
+def test_title_bar_and_island_drag_the_window(tmp_path):
+    """Dragging the title bar or the island must await start_dragging."""
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    pantalla.page.window = _VentanaAsincrona()
+    detectores = [
+        c
+        for raiz in (pantalla._crear_barra(), pantalla.vista_isla())
+        for c in _descendientes(raiz)
+        if isinstance(c, ft.GestureDetector) and c.on_pan_start
+    ]
+    assert len(detectores) >= 2
+    for detector in detectores:
+        _ejecutar_manejador(detector.on_pan_start)
+
+    assert pantalla.page.window.llamadas == ["start_dragging"] * len(detectores)
