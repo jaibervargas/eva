@@ -712,3 +712,41 @@ def test_applying_a_design_recolors_an_open_island(tmp_path):
     pantalla.aplicar_diseno("marea")
 
     assert pantalla._isla_surface.bgcolor == DISENOS["marea"].fondo_lateral
+
+
+def test_bubble_margins_follow_the_window_width(tmp_path):
+    """A fixed 60 px gutter eats the usable width on a narrow window."""
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    pantalla.vista()
+    pantalla._agregar(ft.Text("una respuesta"), de_usuario=False)
+
+    pantalla.page.width = 1600
+    pantalla._ajustar_layout(None)
+    ancha = pantalla.mensajes.controls[0].padding.right
+
+    pantalla.page.width = 640
+    pantalla._ajustar_layout(None)
+    angosta = pantalla.mensajes.controls[0].padding.right
+
+    assert ancha > angosta
+    assert angosta >= 8  # never flush against the edge
+
+
+def test_message_text_shrinks_on_narrow_windows(tmp_path):
+    import flet as ft
+
+    pantalla = _marea(tmp_path)
+    pantalla.vista()
+    pantalla._agregar(ft.Text("una respuesta"), de_usuario=False)
+
+    pantalla.page.width = 1600
+    pantalla._ajustar_layout(None)
+    grande = pantalla.mensajes.controls[0].content.controls[-1].content.size
+
+    pantalla.page.width = 640
+    pantalla._ajustar_layout(None)
+    chico = pantalla.mensajes.controls[0].content.controls[-1].content.size
+
+    assert grande > chico

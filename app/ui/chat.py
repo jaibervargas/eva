@@ -46,7 +46,17 @@ SIN_MEMORIA = "Memoria a largo plazo no disponible"
 log = logging.getLogger(__name__)
 
 
-def _burbuja(texto: ft.Text, de_usuario: bool, boton: ft.Control | None = None, avatar: ft.Control | None = None, fondo: str | None = None) -> ft.Control:
+def _margen_burbuja(ancho: float) -> float:
+    """Side gutter that leaves bubbles readable at any window width."""
+    return max(16.0, min(ancho * 0.12, 120.0))
+
+
+def _tamano_mensaje(ancho: float) -> int:
+    """Body size for messages; one step down on narrow windows."""
+    return 13 if ancho < 760 else 15
+
+
+def _burbuja(texto: ft.Text, de_usuario: bool, boton: ft.Control | None = None, avatar: ft.Control | None = None, fondo: str | None = None, margen: float = 60) -> ft.Control:
     """User bubbles on the right in blue, Eva's on the left in gray (with
     ``boton`` beside it, e.g. "Escuchar")."""
     globo = ft.Container(
@@ -69,7 +79,7 @@ def _burbuja(texto: ft.Text, de_usuario: bool, boton: ft.Control | None = None, 
             alignment=ft.MainAxisAlignment.END if de_usuario else ft.MainAxisAlignment.START,
             vertical_alignment=ft.CrossAxisAlignment.END,
         ),
-        padding=ft.Padding.only(left=60) if de_usuario else ft.Padding.only(right=60),
+        padding=ft.Padding.only(left=margen) if de_usuario else ft.Padding.only(right=margen),
     )
 
 
@@ -138,6 +148,10 @@ class PantallaChat:
         self.lista_historial = ft.ListView(expand=True, spacing=2)
         # Every design shows the history column beside the rail from the start.
         self.historial_visible = True
+        # Message flow depends on the window width; _ajustar_layout keeps these
+        # in step with it.
+        self._margen_mensajes = 60.0
+        self._tamano_texto = 15
         self.etiqueta_modelo = ft.Text("", size=12, color=GRIS_TEXTO, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         # Discreet note under the model label; hidden while memory works.
         self.nota_memoria = ft.Text(SIN_MEMORIA, size=11, color=GRIS_TEXTO, italic=True, visible=False)
@@ -516,6 +530,7 @@ class PantallaChat:
             self.campo.max_lines = 3
         elif self.campo.max_lines != 5:
             self.campo.max_lines = 5
+        self._ajustar_mensajes(ancho)
         if getattr(self.page, "controls", None):
             self.page.update()
 
@@ -584,6 +599,21 @@ class PantallaChat:
                 log.exception("Could not refresh the screen after learning")
         except Exception:  # e.g. the window is closing: keep the extractor alive
             log.exception("Could not refresh the screen after learning")
+
+    def _ajustar_mensajes(self, ancho: float) -> None:
+        """Re-flow the conversation for the current width."""
+        self._margen_mensajes = _margen_burbuja(ancho)
+        self._tamano_texto = _tamano_mensaje(ancho)
+        for burbuja in self.mensajes.controls:
+            burbuja.padding = (
+                ft.Padding.only(left=self._margen_mensajes)
+                if burbuja.padding and burbuja.padding.left
+                else ft.Padding.only(right=self._margen_mensajes)
+            )
+            for pieza in getattr(burbuja.content, "controls", []):
+                contenido = getattr(pieza, "content", None)
+                if isinstance(contenido, ft.Text):
+                    contenido.size = self._tamano_texto
 
     def _actualizar_pagina(self) -> bool:
         """Refresh the window; False once its session is gone.
@@ -801,8 +831,15 @@ class PantallaChat:
         return AZUL_USUARIO if de_usuario else GRIS_EVA
 
     def _agregar(self, texto: ft.Text, de_usuario: bool) -> None:
+        texto.size = texto.size or self._tamano_texto
         self.mensajes.controls.append(
-            _burbuja(texto, de_usuario, avatar=self._avatar_mensaje() if not de_usuario else self._icono_usuario(), fondo=self._fondo_mensaje(de_usuario))
+            _burbuja(
+                texto,
+                de_usuario,
+                avatar=self._avatar_mensaje() if not de_usuario else self._icono_usuario(),
+                fondo=self._fondo_mensaje(de_usuario),
+                margen=self._margen_mensajes,
+            )
         )
 
     def _mostrar_error_conexion(self, mensaje: str) -> None:
