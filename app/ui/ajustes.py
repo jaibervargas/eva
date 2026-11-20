@@ -21,7 +21,7 @@ from app.llm.base import ErrorLLM
 from app.llm.cloud_client import crear_cliente
 from app.llm.local_client import ClienteLocal
 from app.secretos import ErrorSecretos, borrar_clave, guardar_clave, leer_clave
-from app.ui.disenos import SelectorDiseno, leer_diseno
+from app.ui.disenos import DISENOS, SelectorDiseno, diseno_valido, leer_diseno
 from app.ui.panel_chatgpt import PanelChatGPT
 from app.ui.reproductor import MODO_POR_DEFECTO, MODOS, PRUEBA, VozEva, modo_valido
 from app.voice.stt import ErrorVoz
@@ -57,8 +57,10 @@ class DialogoAjustes:
         self.al_apariencia = al_apariencia or (lambda config: None)
         self._inicio_sesion: threading.Event | None = None  # set while signing in
 
+        clave_diseno = diseno_valido(leer_diseno(config)) or "marea"
+        self.diseno = DISENOS[clave_diseno]
         self.proveedor = ft.Dropdown(
-            label="Proveedor",
+            label=None,
             value=config.proveedor,
             options=[ft.DropdownOption(key=k, text=p.nombre) for k, p in PROVEEDORES.items()],
             on_select=self._cambio_proveedor,
@@ -77,7 +79,7 @@ class DialogoAjustes:
             [ft.Row([self.clave, self.boton_borrar]), self.boton_openrouter],
             tight=True,
         )
-        self.modelo = ft.Dropdown(label="Modelo", options=[], expand=True)
+        self.modelo = ft.Dropdown(label=None, options=[], expand=True)
         # Selectable so the sign-in address can be copied when no browser opens.
         self.estado = ft.Text("", size=12, color=GRIS_TEXTO, selectable=True)
         self.chatgpt = PanelChatGPT(page, self.estado, self._cargar_modelos, self._vaciar_modelos)
@@ -98,38 +100,117 @@ class DialogoAjustes:
             expand=True,
         )
         self.estado_voz = ft.Text("", size=12, color=GRIS_TEXTO, selectable=True)
-        self.boton_apariencia = ft.OutlinedButton("Apariencia", on_click=self._abrir_apariencia)
+        for control in (self.proveedor, self.modelo, self.voz_eva, self.responder):
+            control.color = self.diseno.texto
+            control.bgcolor = self.diseno.superficie_mensaje
+            control.border = ft.OutlineInputBorder(side=ft.BorderSide(1, self.diseno.acento))
+            control.focused_border = ft.OutlineInputBorder(side=ft.BorderSide(2, self.diseno.acento))
+        self.boton_probar.style = ft.ButtonStyle(
+            color=self.diseno.texto,
+            side=ft.BorderSide(1, self.diseno.acento),
+            shape=ft.RoundedRectangleBorder(radius=self.diseno.radio),
+        )
+        self.boton_apariencia = ft.OutlinedButton(
+            content=ft.Row(
+                [
+                    ft.Text(self.diseno.nombre, color=self.diseno.texto),
+                    ft.Icon(ft.Icons.CHEVRON_RIGHT, color=self.diseno.texto),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            on_click=self._abrir_apariencia,
+            expand=True,
+            style=ft.ButtonStyle(
+                color=self.diseno.texto,
+                side=ft.BorderSide(1, self.diseno.acento),
+                shape=ft.RoundedRectangleBorder(radius=self.diseno.radio),
+            ),
+        )
+        self.boton_guardar.style = ft.ButtonStyle(
+            bgcolor={ft.ControlState.DEFAULT: self.diseno.acento},
+            color={ft.ControlState.DEFAULT: self.diseno.texto},
+            shape=ft.RoundedRectangleBorder(radius=self.diseno.radio),
+        )
+        campo = ft.TextStyle(color=self.diseno.texto)
         self.dialogo = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Ajustes"),
+            bgcolor=self.diseno.fondo_lateral,
+            shape=ft.RoundedRectangleBorder(radius=self.diseno.radio),
+            title=ft.Row(
+                [
+                    ft.Text("Ajustes", size=28, weight=ft.FontWeight.W_600, color=self.diseno.texto),
+                    ft.IconButton(
+                        icon=ft.Icons.CLOSE,
+                        icon_color=self.diseno.texto,
+                        tooltip="Cerrar",
+                        on_click=self._cancelar,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
             content=ft.Column(
                 [
+                    self._seccion("Modelo de IA", ft.Icons.MEMORY),
+                    self._etiqueta("Proveedor"),
                     ft.Row([self.proveedor]),
                     self.fila_nube,
                     self.chatgpt.contenedor,
+                    self._etiqueta("Modelo"),
                     ft.Row(
                         [
                             self.modelo,
                             ft.IconButton(
                                 icon=ft.Icons.REFRESH,
+                                icon_color=self.diseno.acento,
                                 tooltip="Volver a buscar modelos",
                                 on_click=lambda e: self._cargar_modelos(),
                             ),
                         ]
                     ),
-                    self.estado,
-                    ft.Divider(height=1),
+                    ft.Row(
+                        [ft.Container(width=8, height=8, bgcolor=self.diseno.acento, border_radius=4), self.estado],
+                        spacing=8,
+                    ),
+                    ft.Divider(height=1, color=self.diseno.acento),
+                    self._seccion("Voz", ft.Icons.GRAPHIC_EQ),
+                    self._etiqueta("Voz de Eva"),
                     ft.Row([self.voz_eva, self.boton_probar]),
+                    self._etiqueta("Responder en voz alta"),
                     ft.Row([self.responder]),
+                    ft.Divider(height=1, color=self.diseno.acento),
+                    self._seccion("Apariencia", ft.Icons.PALETTE),
+                    # Inside a Row the button expands sideways; as a direct
+                    # child of the Column its expand would grow vertically and
+                    # leave the row without a clickable height.
                     ft.Row([self.boton_apariencia]),
                     self.estado_voz,
                 ],
                 tight=True,
-                width=420,
+                width=560,
+                spacing=8,
             ),
-            actions=[ft.TextButton("Cancelar", on_click=self._cancelar), self.boton_guardar],
+            actions=[
+                ft.TextButton(
+                    "Cancelar",
+                    on_click=self._cancelar,
+                    style=ft.ButtonStyle(color=self.diseno.texto),
+                ),
+                self.boton_guardar,
+            ],
         )
         self._mostrar_campos()
+
+    def _etiqueta(self, texto: str) -> ft.Text:
+        return ft.Text(texto, color=self.diseno.texto, size=13, weight=ft.FontWeight.W_500)
+
+    def _seccion(self, texto: str, icono: str) -> ft.Row:
+        return ft.Row(
+            [
+                ft.Icon(icono, color=self.diseno.acento, size=24),
+                ft.Text(texto, color=self.diseno.texto, size=18, weight=ft.FontWeight.W_600),
+            ],
+            spacing=10,
+        )
 
     def abrir(self) -> None:
         self.page.show_dialog(self.dialogo)
