@@ -360,10 +360,6 @@ class PantallaChat:
         """Flet 1.1.2 makes Window.close a coroutine; it must be awaited."""
         await self.page.window.close()
 
-    async def _arrastrar_ventana(self, e=None) -> None:
-        """Window.start_dragging is a coroutine too; await it to move Eva."""
-        await self.page.window.start_dragging()
-
     def _crear_barra(self) -> ft.Container:
         """Eva's own title bar: drag area and the three window controls.
 
@@ -371,10 +367,11 @@ class PantallaChat:
         conversation title lives in the chat header instead.
         """
         tema = DISENOS.get(self.diseno or "brisa", DISENOS["brisa"])
-        libre = ft.GestureDetector(
-            content=ft.Container(expand=True),
+        # The drag starts natively; a transparent color makes the empty
+        # space receive the pointer.
+        libre = ft.WindowDragArea(
+            content=ft.Container(expand=True, bgcolor=ft.Colors.TRANSPARENT),
             expand=True,
-            on_pan_start=self._arrastrar_ventana,
         )
         return ft.Container(
             bgcolor=tema.fondo_lateral,
@@ -500,10 +497,10 @@ class PantallaChat:
                 spacing=10,
             ),
         )
-        self._isla_control = ft.GestureDetector(
+        self._isla_control = ft.WindowDragArea(
             visible=False,
             content=self._isla_surface,
-            on_pan_start=self._arrastrar_ventana,
+            maximizable=False,
         )
         return self._isla_control
 

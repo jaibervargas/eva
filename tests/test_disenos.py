@@ -790,19 +790,18 @@ def test_close_button_awaits_the_window_close(tmp_path):
 
 
 def test_title_bar_and_island_drag_the_window(tmp_path):
-    """Dragging the title bar or the island must await start_dragging."""
+    """Dragging must start natively: a Python round trip after pan start
+    arrives too late, and an uncolored container receives no hits."""
     import flet as ft
 
     pantalla = _marea(tmp_path)
-    pantalla.page.window = _VentanaAsincrona()
-    detectores = [
-        c
-        for raiz in (pantalla._crear_barra(), pantalla.vista_isla())
-        for c in _descendientes(raiz)
-        if isinstance(c, ft.GestureDetector) and c.on_pan_start
-    ]
-    assert len(detectores) >= 2
-    for detector in detectores:
-        _ejecutar_manejador(detector.on_pan_start)
+    barra = pantalla._crear_barra()
+    isla = pantalla.vista_isla()
 
-    assert pantalla.page.window.llamadas == ["start_dragging"] * len(detectores)
+    areas_barra = [c for c in _descendientes(barra) if isinstance(c, ft.WindowDragArea)]
+    areas_isla = [c for c in _descendientes(isla) if isinstance(c, ft.WindowDragArea)]
+    assert len(areas_barra) == 1
+    assert areas_barra[0].content.bgcolor == ft.Colors.TRANSPARENT
+    assert len(areas_isla) == 1
+    assert areas_isla[0].maximizable is False
+    assert not any(isinstance(c, ft.GestureDetector) and c.on_pan_start for c in _descendientes(barra))
