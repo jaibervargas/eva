@@ -24,9 +24,9 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - T1 [S1, S2] shared UI state, design catalog, persistence and chooser — done (L4; 808 passed, 3 skipped)
 - T2 [S3] Brisa, Marea and Horizonte layouts — done (L5; 808 passed, 3 skipped)
 - T3 [S4] fullscreen/medium/island integration per design — done (L6; 808 passed, 3 skipped)
-- T4 [S5, S6] tests, docs, captures and Windows validation — in progress (L7, L8)
+- T4 [S5, S6] tests, docs, captures and Windows validation — done (L7–L21; captures by the user, agent capture unavailable per L9; 884 passed, 3 skipped)
 - T5 [S1-S6] review, PR and delivery — pending
-- T6 [S7] settings dialog per the Marea reference — in progress (L17; `f5d906a` dialog, `6e4f86c` chat text; 881 passed, 3 skipped; awaiting live check)
+- T6 [S7] settings dialog per the Marea reference — done (L16, L17, L19; `f5d906a`, `6e4f86c`)
 
 ## Log
 
@@ -35,6 +35,7 @@ Branch: `feat/fase-5a-disenos-eva`, based on the Phase 5 branch until its PR is 
 - L3 (decision): User approved implementation and asked to add it to the work plan as Phase 5A: "si me parece de paso agrega estos cambios en el pland e trabajo como fase 5A".
 - L4 (T1 verification): Added `app/ui/disenos.py` with the three structural design tokens, nested preference helpers, shared `EstadoInterfaz`, and first-run `SelectorDiseno`; wired selection into `app/main.py` and the live chat theme. Focused tests: 48 passed. Full suite: 808 passed, 3 skipped.
 - L5 (T2 verification): Added structural layout branches in `PantallaChat`: Brisa uses one history rail, Marea uses menu plus a separate history column, and Horizonte uses real-conversation tabs. Focused layout/regression tests: 66 passed. Full suite: 808 passed, 3 skipped. Unsupported Favorites and fake task cards remain omitted.
+- L21 (user): "si ya quedaron bien los mensajes". Long messages wrap live. T4 and T6 closed; all three designs, the three window modes, the settings dialog, drag and close validated on Windows with the user's own screenshots.
 - L20 (user + T4): "si ya deja arrastrarlas" (window and island drag validated live). The screenshot `docs/referencias/chat-texto.png` showed long user and Eva messages running past the right edge: the bubble had `expand_loose=True` without `expand`, which Flet ignores. Added `expand=True`; RED test first. Independent verify PASS (structure and Flet API; rendered wrapping only provable live). Full suite: 884 passed, 3 skipped.
 - L19 (user + T4): "no se puede arrastrar la ventana ni la isla ,si la x lo cerro 2.quedo bien 3. si 4. no los textos de la respuesta de eva no se ajustan dependiendo del tamaño". Horizonte and the settings dialog validated live. Awaiting the drag still failed: the drag must start natively and the empty title-bar container received no hits. Title bar and island now use `ft.WindowDragArea` (transparent hit area; island not maximizable). Full suite: 883 passed, 3 skipped. Eva text sizing pending a screenshot.
 - L18 (T4, defect found in the live log): `RuntimeWarning: coroutine 'Window.start_dragging' was never awaited` and the same for `Window.close`. In Flet 1.1.2 both are coroutines, and the lambda handlers created them without awaiting, so dragging the title bar or the island and Eva's own close button did nothing. They are now async methods `_cerrar_ventana` and `_arrastrar_ventana`; reproduced RED first with two tests. Full suite: 883 passed, 3 skipped.
