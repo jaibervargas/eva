@@ -320,7 +320,7 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 - [x] Omitir controles que el proyecto todavía no respalda: Favoritos, pestañas editables y tarjetas de tareas sin datos estructurados; probar contraste, foco, etiquetas accesibles y las nueve combinaciones en Windows.
 - [x] Rediseñar el modal de Ajustes según la referencia de Marea (secciones Modelo de IA, Voz y Apariencia; colores del diseño activo) y ajustar el tamaño de los textos del chat al ancho de la ventana.
 
-**Entregable:** el usuario elige Brisa, Marea u Horizonte, el diseño queda guardado y puede cambiarlo sin perder la conversación. **Estado: completa y validada en Windows (Brisa, Marea y Horizonte en sus tres modos, modal de Ajustes, arrastre de ventana e isla y mensajes largos; 884 pruebas con pytest, 3 omitidas); pendiente la revisión y el PR.**
+**Entregable:** el usuario elige Brisa, Marea u Horizonte, el diseño queda guardado y puede cambiarlo sin perder la conversación. **Estado: completa y validada en Windows (Brisa, Marea y Horizonte en sus tres modos, modal de Ajustes, arrastre de ventana e isla y mensajes largos; 884 pruebas con pytest, 3 omitidas); fusionada en `main` con el PR #10.**
 
 Omisiones deliberadas: el historial no tiene marca de favorito ni permite renombrar o borrar conversaciones, y los mensajes son texto plano o Markdown sin tareas estructuradas; por eso no se muestran Favoritos, pestañas de conversaciones, menú por conversación ni tarjetas de tareas. Las barras de grabación indican actividad, no el nivel real del micrófono.
 
@@ -401,4 +401,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0, 1, 2, 3, 4 y 5 están completas; comienza la Fase 5A, que agrega los diseños seleccionables Brisa, Marea y Horizonte antes de la Fase 5B animada.
+**Siguiente paso concreto:** las Fases 0 a 5 y la Fase 5A están completas y en `main`; sigue la Fase 5B animada, con los diseños que se están preparando en Penpot como nueva referencia.
