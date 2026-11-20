@@ -65,6 +65,9 @@ def _burbuja(texto: ft.Text, de_usuario: bool, boton: ft.Control | None = None, 
         border=ft.Border.all(1, "#4C7884") if fondo == "#0B3442" else None,
         border_radius=RADIO,
         padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+        # expand_loose only works together with expand: the bubble becomes a
+        # loose Flexible, as wide as its text but never past the chat.
+        expand=True,
         expand_loose=True,
     )
     controles = [globo] if boton is None else [globo, boton]

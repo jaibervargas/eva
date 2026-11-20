@@ -805,3 +805,18 @@ def test_title_bar_and_island_drag_the_window(tmp_path):
     assert len(areas_isla) == 1
     assert areas_isla[0].maximizable is False
     assert not any(isinstance(c, ft.GestureDetector) and c.on_pan_start for c in _descendientes(barra))
+
+
+def test_long_messages_wrap_inside_the_chat(tmp_path):
+    """expand_loose alone does nothing in Flet: without expand the bubble is
+    not flexible and a long answer runs past the window edge."""
+    import flet as ft
+
+    from app.ui.chat import _burbuja
+
+    for de_usuario in (True, False):
+        texto = ft.Text("palabra " * 80)
+        fila = _burbuja(texto, de_usuario, avatar=ft.Icon(ft.Icons.PERSON)).content
+        globo = next(c for c in fila.controls if isinstance(c, ft.Container) and c.content is texto)
+        assert globo.expand
+        assert globo.expand_loose is True
