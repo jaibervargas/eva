@@ -30,9 +30,14 @@ TEXTO = "#E5E7EB"
 GRIS_TEXTO = "#9CA3AF"
 ROJO_ERROR = "#F87171"
 RADIO = 12
-ANCHO_LATERAL = 260
+ANCHO_LATERAL = 280
+ANCHO_PANEL_EVA = 248
 PENSANDO = "…"
+ESTADO_PENSANDO = "Pensando…"
 CONECTANDO = "Conectando…"
+LISTO = "Listo"
+ESCUCHANDO = "Escuchando…"
+HABLANDO = "Hablando…"
 SIN_MEMORIA = "Memoria a largo plazo no disponible"
 
 log = logging.getLogger(__name__)
@@ -87,6 +92,12 @@ class PantallaChat:
         self._aprendiendo = False
         self._cliente_aprender = None
         self._error_conexion: ft.Control | None = None  # at most one shown
+        self.estado = ft.Text(LISTO, size=12, color=GRIS_TEXTO)
+        self.estado_panel = ft.Text(LISTO, size=12, color=GRIS_TEXTO)
+        self.estado_isla = ft.Text(LISTO, size=11, color=GRIS_TEXTO)
+        self.lateral: ft.Control | None = None
+        self.panel_eva: ft.Control | None = None
+        self._restaurar_isla = lambda: None
 
         # Chat area
         self.mensajes = ft.ListView(expand=True, spacing=10, padding=16, auto_scroll=True)
@@ -121,10 +132,11 @@ class PantallaChat:
     # ----- layout -----
 
     def vista(self) -> ft.Control:
-        lateral = ft.Container(
+        self.lateral = lateral = ft.Container(
             width=ANCHO_LATERAL,
             bgcolor=FONDO_LATERAL,
-            padding=12,
+            padding=16,
+            border_radius=ft.BorderRadius.only(top_right=18, bottom_right=18),
             content=ft.Column(
                 [
                     ft.FilledButton(
@@ -150,11 +162,83 @@ class PantallaChat:
                 expand=True,
             ),
         )
+        barra = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Text("Eva", size=20, weight=ft.FontWeight.W_600, color=TEXTO),
+                    ft.Container(expand=True),
+                    self.estado,
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.only(left=20, right=20, top=14, bottom=8),
+        )
+        self.panel_eva = ft.Container(
+            width=ANCHO_PANEL_EVA,
+            bgcolor=FONDO_LATERAL,
+            border_radius=22,
+            padding=20,
+            content=ft.Column(
+                [
+                    ft.Icon(ft.Icons.AUTO_AWESOME, size=48, color="#67E8F9"),
+                    ft.Text("Eva", size=22, weight=ft.FontWeight.W_600, color=TEXTO),
+                    ft.Text("Tu espacio para pensar, hablar y crear.", color=GRIS_TEXTO, size=12),
+                    ft.Divider(height=20, color="#2B3445"),
+                    self.estado_panel,
+                ],
+                spacing=8,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        )
         chat = ft.Column(
-            [self.mensajes, ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=12)],
+            [
+                ft.Column([barra, self.mensajes], expand=True),
+                ft.Container(ft.Row([self.campo, self.microfono.boton, self.boton]), padding=16),
+            ],
             expand=True,
         )
-        return ft.Row([lateral, chat], expand=True, spacing=0)
+        shell = ft.Row([lateral, chat, self.panel_eva], expand=True, spacing=0)
+        self._ajustar_layout(None)
+        self.page.on_resize = self._ajustar_layout
+        return shell
+
+    def vista_isla(self) -> ft.Control:
+        """Compact view used while the desktop window is minimized."""
+        return ft.Container(
+            visible=False,
+            bgcolor=FONDO_LATERAL,
+            border_radius=22,
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.AUTO_AWESOME, color="#67E8F9", size=28),
+                    ft.Column([ft.Text("Eva", color=TEXTO, weight=ft.FontWeight.W_600), self.estado_isla], spacing=0, expand=True),
+                    ft.IconButton(ft.Icons.OPEN_IN_NEW, tooltip="Volver a la ventana", on_click=lambda e: self._restaurar_isla()),
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        )
+
+    def asignar_restaurar_isla(self, restaurar) -> None:
+        self._restaurar_isla = restaurar
+
+    def _ajustar_layout(self, e) -> None:
+        """Collapse secondary panels when the window becomes tablet-sized."""
+        ancho = getattr(self.page, "width", None)
+        if not isinstance(ancho, (int, float)) or ancho <= 0:
+            ancho = 1200
+        compacto = ancho < 900
+        movil = ancho < 680
+        if self.lateral is not None:
+            self.lateral.visible = not compacto
+        if self.panel_eva is not None:
+            self.panel_eva.visible = not compacto
+        if movil:
+            self.campo.max_lines = 3
+        elif self.campo.max_lines != 5:
+            self.campo.max_lines = 5
+        if getattr(self.page, "controls", None):
+            self.page.update()
 
     def iniciar(self) -> None:
         """Show the saved conversations, connect to the model server and load
@@ -216,6 +300,9 @@ class PantallaChat:
         try:
             self._actualizar_nota_memoria()
             self.page.update()
+        except RuntimeError as exc:  # the background extractor may outlive the Flet window
+            if "destroyed session" not in str(exc).lower():
+                log.exception("Could not refresh the screen after learning")
         except Exception:  # e.g. the window is closing: keep the extractor alive
             log.exception("Could not refresh the screen after learning")
 
@@ -242,12 +329,21 @@ class PantallaChat:
 
     # ----- model connection and settings -----
 
+    def _poner_estado(self, texto: str, color: str) -> None:
+        self.estado.value = texto
+        self.estado.color = color
+        self.estado_panel.value = texto
+        self.estado_panel.color = color
+        self.estado_isla.value = texto
+        self.estado_isla.color = color
+
     def _ocupar(self, ocupado: bool) -> None:
         with self._estado:
             self.ocupado = ocupado
             self._estado.notify_all()
         self.boton.disabled = ocupado
         self.microfono.actualizar()
+        self._poner_estado(ESTADO_PENSANDO if ocupado else LISTO, GRIS_TEXTO)
 
     def _conectar_en_segundo_plano(
         self, texto: str | None = None, del_campo: bool = True, por_voz: bool = False
@@ -258,15 +354,19 @@ class PantallaChat:
             # Lock the field so nothing typed while connecting can be lost.
             self.campo.disabled = True
         self.etiqueta_modelo.value = CONECTANDO
+        self._poner_estado(CONECTANDO, GRIS_TEXTO)
         self.page.update()
         self.page.run_thread(self._conectar_y_enviar, texto, del_campo, por_voz)
 
     def _conectar_y_enviar(self, texto: str | None, del_campo: bool = True, por_voz: bool = False) -> None:
         try:
             self._conectar()  # failures normally become the connection-error bubble
-        except Exception:
+        except Exception as exc:
             log.exception("Unexpected error while connecting")
             self.cliente = None
+            self.etiqueta_modelo.value = f"{PROVEEDORES[self.config.proveedor].nombre} · sin conexión"
+            self._poner_estado("Sin conexión", ROJO_ERROR)
+            self._mostrar_error_conexion(f"Ocurrió un error inesperado al conectar con el modelo: {exc}")
         finally:
             if texto is not None:
                 self.campo.disabled = False  # only undo the lock this path set
@@ -278,6 +378,8 @@ class PantallaChat:
             self._responder(texto, respuesta, por_voz)  # releases the screen when done
             return
         self._ocupar(False)
+        if self.cliente is None:
+            self._poner_estado("Sin conexión", ROJO_ERROR)
         self.page.update()
 
     def _conectar(self) -> None:
@@ -299,11 +401,13 @@ class PantallaChat:
                 mensaje = f"Ocurrió un error inesperado: {exc}"
             self.cliente = None
             self.etiqueta_modelo.value = f"{proveedor} · sin conexión"
+            self._poner_estado("Sin conexión", ROJO_ERROR)
             self._mostrar_error_conexion(mensaje)
         else:
             # ChatGPT models have a display name besides their id.
             nombre = getattr(self.cliente, "nombre_modelo", None) or self.cliente.modelo
             self.etiqueta_modelo.value = f"{proveedor} · {nombre}"
+            self._poner_estado(LISTO, GRIS_TEXTO)
             self._quitar_error_conexion()
 
     def _abrir_ajustes(self) -> None:

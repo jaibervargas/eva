@@ -304,12 +304,12 @@ Son 10 fases; cada una termina con un entregable que se puede probar. Marca las 
 
 ### Fase 5 — Interfaz y experiencia (semana 7)
 
-- [ ] Aplicar la guía visual de la sección 6 (tema oscuro de Flet y colores).
-- [ ] Agregar los indicadores de estado (escuchando, pensando, hablando).
-- [ ] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Parcial, adelantado en el bloque 2A: LM Studio u Ollama apagado o que se corta a mitad de respuesta, errores inesperados, ajustes que no se pueden guardar y conexión en segundo plano sin congelar la ventana. Pendiente de la revisión: si la conexión falla de forma inesperada, la etiqueta queda en "Conectando…" sin burbuja de error. Adelantado en los bloques 2C y 2D: clave de API inválida, sin conexión o demora del proveedor de la nube, límite de uso o falta de saldo, sesión de ChatGPT vencida y plan de ChatGPT no autorizado. Adelantado en la Fase 3: sin permiso de micrófono, sin micrófono conectado, fallo del grabador, fallo al descargar el modelo de voz y audio que no se entendió.)*
-- [ ] Escribir `setup_inicial.py`: detectar si Ollama o LM Studio están abiertos y descargar los modelos de voz al primer inicio, con barra de progreso.
+- [x] Aplicar la guía visual de la sección 6 (tema oscuro de Flet y colores). *(Shell de tres zonas, barra superior de estado, panel contextual de Eva, espaciado y superficies redondeadas.)*
+- [x] Agregar los indicadores de estado (escuchando, pensando, hablando). *(También muestra conectando, transcribiendo, descargando y sin conexión; se adapta al chat, al panel de Eva y a la isla flotante.)*
+- [x] Manejar errores: sin micrófono, sin internet, Ollama o LM Studio apagado, clave de API inválida. *(Los errores existentes se mantienen y una excepción inesperada al conectar ahora muestra "Sin conexión", una explicación accionable y conserva el texto para reintentar.)*
+- [x] Escribir `setup_inicial.py`: detectar si Ollama o LM Studio están abiertos y descargar los modelos de voz al primer inicio, con barra de progreso. *(Preparación inyectable de Piper y Whisper, progreso visible y CLI `python -m app.setup_inicial`; las pruebas no usan red ni descargas reales.)*
 
-**Entregable:** versión beta lista para que otra persona la pruebe desde el código.
+**Entregable:** versión beta lista para que otra persona la pruebe desde el código. **Estado: completa, probada en Windows con la ventana completa, layout responsive, estados, errores y la isla flotante (804 pruebas con pytest; 3 omitidas).**
 
 ### Fase 5B — Eva animada y con voz (semanas 8 y 9)
 
@@ -388,4 +388,4 @@ El plan dura 14 semanas dedicando unas 8 a 10 horas por semana; si se omite Dock
 - Recuerda la conversación después de cerrar y volver a abrir la app.
 - Funciona en Windows y en al menos otro sistema operativo.
 
-**Siguiente paso concreto:** las Fases 0, 1, 2, 3 y 4 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura, entiende lo que se le dice por micrófono y responde en voz alta con Piper. Sigue la Fase 5 (interfaz final).
+**Siguiente paso concreto:** las Fases 0, 1, 2, 3, 4 y 5 están completas: Eva chatea con modelos locales, de la nube y con el plan de ChatGPT, recuerda al usuario con Engram, guarda claves y tokens de forma segura, entiende lo que se le dice por micrófono, responde en voz alta con Piper y tiene una interfaz responsive con isla flotante. Sigue la Fase 5B (Eva animada y con voz).
